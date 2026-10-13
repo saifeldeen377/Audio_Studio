@@ -50,7 +50,7 @@ This project was built to answer a simple question: _What if an audio workstatio
 
 ### Option A — Play Online (Easiest)
 You can use the studio directly in your browser without downloading anything:
- **[Audio_Studio - Live Version](https://saifeldeen377.github.io/audio_studio/)**
+ **[Audio_Studio - Live Version](https://saifeldeen377.github.io/Audio_Studio/)**
 
 ### Option B — Open locally
 1. Download or clone this project folder.
