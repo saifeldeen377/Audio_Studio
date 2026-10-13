@@ -17,6 +17,58 @@ let calibrationTapsCount = 0;
 let tickIntervalId = null;
 const tapTimeDiffs = [];
 let calibrationStartTime = 0;
+// Arabic and Shift key normalization helpers for keyboard shortcuts
+const SM_ARABIC_TO_LATIN = {
+  'ض': 'q', 'ص': 'w', 'ث': 'e', 'ق': 'r', 'ف': 't', 'غ': 'y', 'ع': 'u', 'ه': 'i', 'خ': 'o', 'ح': 'p', 'ج': '[', 'د': ']',
+  'ش': 'a', 'س': 's', 'ي': 'd', 'ب': 'f', 'ل': 'g', 'ا': 'h', 'ت': 'j', 'ن': 'k', 'م': 'l', 'ك': ';', 'ط': "'",
+  'ئ': 'z', 'ء': 'x', 'ؤ': 'c', 'ر': 'v', 'لا': 'b', 'ى': 'n', 'ة': 'm', 'و': ',', 'ز': '.', 'ظ': '/',
+  'َ': 'q', 'ً': 'w', 'ُ': 'e', 'ٌ': 'r', 'لإ': 't', 'إ': 'y', '`': 'u', '÷': 'i', '×': 'o', '؛': 'p', '<': '[', '>': ']',
+  'ِ': 'a', 'ٍ': 's', ']': 'd', '[': 'f', 'لأ': 'g', 'أ': 'h', 'ـ': 'j', '،': 'k', '/': 'l', ':': ';', '"': "'",
+  '~': 'z', 'ْ': 'x', '}': 'c', '{': 'v', 'لآ': 'b', 'آ': 'n', "'": 'm', '؟': '/',
+  '١': '1', '٢': '2', '٣': '3', '٤': '4', '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9', '٠': '0'
+};
+
+const SM_SHIFT_DIGITS = {
+  '!': '1', '@': '2', '#': '3', '$': '4', '%': '5',
+  '^': '6', '&': '7', '*': '8', '(': '9', ')': '0'
+};
+
+function smCanonicalKey(k) {
+  if (!k) return '';
+  const lower = k.toLowerCase();
+  if (SM_ARABIC_TO_LATIN[lower]) return SM_ARABIC_TO_LATIN[lower];
+  if (SM_SHIFT_DIGITS[lower]) return SM_SHIFT_DIGITS[lower];
+  return lower;
+}
+
+function matchesShortcutKey(configuredKey, e) {
+  if (!configuredKey || !e) return false;
+  const confRaw = configuredKey.toLowerCase();
+  const confCanon = smCanonicalKey(confRaw);
+
+  const eventKeyRaw = (e.key || '').toLowerCase();
+  const eventKeyCanon = smCanonicalKey(eventKeyRaw);
+
+  if (eventKeyRaw && (eventKeyRaw === confRaw || eventKeyRaw === confCanon)) return true;
+  if (eventKeyCanon && (eventKeyCanon === confCanon || eventKeyCanon === confRaw)) return true;
+
+  const code = e.code || '';
+  let codeCanon = '';
+  if (code.startsWith('Digit')) {
+    codeCanon = code.slice(5).toLowerCase();
+  } else if (code.startsWith('Key')) {
+    codeCanon = code.slice(3).toLowerCase();
+  } else if (code.startsWith('Numpad') && code.length === 7 && !isNaN(code.slice(6))) {
+    codeCanon = code.slice(6).toLowerCase();
+  }
+
+  if (codeCanon && (codeCanon === confCanon || codeCanon === confRaw)) {
+    return true;
+  }
+
+  return false;
+}
+window.matchesShortcutKey = matchesShortcutKey;
 
 function initSuperMode() {
  const enterBtn = document.getElementById('btn-enter-super-mode');
@@ -230,6 +282,7 @@ function initSuperMode() {
 
  // Manage Effects dialog
  btnManageEffects.addEventListener('click', () => {
+  smManageEffectEditId = null;
   renderManageEffectsList();
   manageEffectsDialog.showModal();
   if (smEffects.length === 0) {
@@ -238,12 +291,14 @@ function initSuperMode() {
  });
 
  btnManageEffectsClose.addEventListener('click', () => {
+  smManageEffectEditId = null;
   manageEffectsDialog.close();
   btnManageEffects.focus();
  });
 
  btnManageEffectsReset.addEventListener('click', () => {
   smEffects.length = 0;
+  smManageEffectEditId = null;
   renderManageEffectsList();
   renderSmShortcutsTable();
   btnManageEffectsClose.focus();
@@ -255,8 +310,21 @@ function initSuperMode() {
  if (e.key === 'Escape'&& smActive) {
     if (manageEffectsDialog.open) {
         e.preventDefault();
-        manageEffectsDialog.close();
-        btnManageEffects.focus();
+        if (smManageEffectEditId !== null) {
+            announce("Edit cancelled.", true);
+            const oldId = smManageEffectEditId;
+            smManageEffectEditId = null;
+            const card = document.querySelector(`#sm-manage-effects-list .sm-card[data-id="${oldId}"]`);
+            if (card) {
+                card.querySelector('.sm-summary-view').hidden = false;
+                card.querySelector('.sm-edit-view').hidden = true;
+                const btn = card.querySelector('.btn-manage-edit');
+                if (btn) btn.focus();
+            }
+        } else {
+            manageEffectsDialog.close();
+            btnManageEffects.focus();
+        }
         return;
     }
     if (manageDialog.open) {
@@ -384,27 +452,29 @@ function initSuperMode() {
  }
 
  // Overlay shortcuts
- const overlay = smOverlays.find(o =>o.key.toLowerCase() === pressedKey);
+ const overlay = smOverlays.find(o => matchesShortcutKey(o.key, e));
  if (overlay) {
  e.preventDefault();
- if (isAlt && isShift) {
+ const isDelete = (isAlt && isShift) || (isCtrl && isShift) || (isAlt && !isCtrl);
+ if (isDelete) {
  cancelActiveOverlay(overlay);
- } else if (isShift) {
+ } else if (isShift && !isCtrl && !isAlt) {
  toggleOverlayPauseResume(overlay);
- } else if (!isAlt) {
+ } else if (!isAlt && !isCtrl && !isShift) {
  triggerOverlayStart(overlay);
  }
  return; // prevent falling through
  }
 
  // Effect shortcuts
- const effect = smEffects.find(ef => ef.key.toLowerCase() === pressedKey);
- if (effect && smIsActive()) {
-  if (isAlt && isShift) {
+ const effect = smEffects.find(ef => matchesShortcutKey(ef.key, e));
+ if (effect) {
+  const isDelete = (isAlt && isShift) || (isCtrl && isShift) || (isAlt && !isCtrl);
+  if (isDelete) {
    e.preventDefault();
    clearEffectRecordings(effect);
    return;
-  } else if (!isAlt && !isShift) {
+  } else if (!isAlt && !isShift && !isCtrl && smIsActive()) {
    e.preventDefault();
    toggleSmEffect(effect);
    return;
@@ -1819,8 +1889,10 @@ function deactivateAllSmEffects(includeReview = true, rememberForResume = false,
   rebuildEffectRouting();
 }
 
+let smManageEffectEditId = null;
+
 /**
- * Render the manage effects list inside the dialog.
+ * Render the manage effects list inside the dialog with full editing capabilities.
  */
 function renderManageEffectsList() {
  const listContainer = document.getElementById('sm-manage-effects-list');
@@ -1833,6 +1905,7 @@ function renderManageEffectsList() {
  if (smEffects.length === 0) {
   document.getElementById('sm-manage-effects-empty').style.display = '';
   resetBtn.style.display = 'none';
+  smManageEffectEditId = null;
   return;
  }
 
@@ -1840,33 +1913,192 @@ function renderManageEffectsList() {
  resetBtn.style.display = 'inline-block';
 
  smEffects.forEach((item, idx) => {
-  const card = document.createElement('div');
+  const card = document.createElement('fieldset');
   card.className = 'sm-card data-row';
+  card.setAttribute('data-id', item.id);
   card.style.border = '1px solid var(--border)';
   card.style.padding = '10px 15px';
+  card.style.position = 'relative';
   card.style.marginBottom = '10px';
 
-  const typeName = SM_EFFECT_TYPES[item.effectType] ? SM_EFFECT_TYPES[item.effectType].name : item.effectType;
+  const def = SM_EFFECT_TYPES[item.effectType];
+  const typeName = def ? def.name : item.effectType;
   const targetNames = { all: 'Everything', base_only: 'Base Only', overlays_only: 'Overlays Only' };
   const targetText = targetNames[item.target] || item.target;
   let paramText = '';
-  if (item.params && item.params.value !== undefined) {
-   paramText = `, Level: ${item.params.value}`;
+  if (def && def.hasParams && item.params && item.params.value !== undefined) {
+   paramText = `, ${def.paramLabel || 'Level'}: ${item.params.value}`;
   }
   const detailsText = `${typeName}, Key: ${item.key.toUpperCase()}, Target: ${targetText}${paramText}`;
 
+  let effectTypeOptionsHtml = '';
+  Object.entries(SM_EFFECT_TYPES).forEach(([typeKey, typeDef]) => {
+   const selected = typeKey === item.effectType ? 'selected' : '';
+   effectTypeOptionsHtml += `<option value="${typeKey}" ${selected}>${escapeHTML(typeDef.name)}</option>`;
+  });
+
+  const hasParams = def && def.hasParams;
+  const paramVal = (item.params && item.params.value !== undefined) ? item.params.value : ((def && def.paramDefault) || 5);
+  const paramLabel = (def && def.paramLabel) || 'Parameter';
+  const paramMin = (def && def.paramMin !== undefined) ? def.paramMin : 1;
+  const paramMax = (def && def.paramMax !== undefined) ? def.paramMax : 10;
+
+  const isEditing = smManageEffectEditId === item.id;
+
   card.innerHTML = `
-   <div style="display: flex; gap: 10px; align-items: center;">
-    <span style="flex: 1;">${detailsText}</span>
-    <button class="btn btn-danger btn-sm btn-effect-delete" aria-label="Remove ${typeName}">Remove</button>
+   <div class="sm-summary-view" style="display: flex; gap: 10px; align-items: center;" ${isEditing ? 'hidden' : ''}>
+    <button class="btn btn-secondary btn-manage-edit" style="flex: 1; text-align: left;">Edit ${detailsText}</button>
+    <button class="btn btn-danger btn-manage-delete" style="flex: 1; text-align: left;">Remove ${detailsText}</button>
+   </div>
+
+   <div class="sm-edit-view" ${!isEditing ? 'hidden' : ''}>
+    <legend style="font-weight: bold; padding: 0 5px;">Editing Effect ${idx + 1}</legend>
+    <div class="form-grid" style="grid-template-columns: 1fr; gap: 10px;">
+     <div class="control-group">
+      <label>Effect Type:</label>
+      <select class="sm-edit-effect-type" aria-label="Effect Type" style="width: 100%; padding: 8px; border-radius: var(--radius-sm); background: var(--bg-main); border: 1px solid var(--border); color: var(--text);">
+       ${effectTypeOptionsHtml}
+      </select>
+     </div>
+     <div class="control-group sm-edit-param-group" ${!hasParams ? 'hidden' : ''}>
+      <label class="sm-edit-param-label">${paramLabel}:</label>
+      <input type="number" class="sm-edit-param-input" min="${paramMin}" max="${paramMax}" step="1" value="${paramVal}" aria-label="Parameter" style="width: 100%; padding: 8px; border-radius: var(--radius-sm); background: var(--bg-main); border: 1px solid var(--border); color: var(--text);">
+     </div>
+     <div class="control-group">
+      <label>Applied To (Target):</label>
+      <select class="sm-edit-effect-target" aria-label="Applied Target" style="width: 100%; padding: 8px; border-radius: var(--radius-sm); background: var(--bg-main); border: 1px solid var(--border); color: var(--text);">
+       <option value="all" ${item.target === 'all' ? 'selected' : ''}>Everything (Base + Overlays)</option>
+       <option value="base_only" ${item.target === 'base_only' ? 'selected' : ''}>Base Audio Only</option>
+       <option value="overlays_only" ${item.target === 'overlays_only' ? 'selected' : ''}>Overlays Only</option>
+      </select>
+     </div>
+     <div class="control-group">
+      <label>Shortcut Key (single letter/number):</label>
+      <input type="text" class="sm-edit-key" maxlength="1" value="${item.key.toUpperCase()}" aria-label="Shortcut" style="width: 100%;">
+     </div>
+     <div style="text-align: right; margin-top: 10px;">
+      <button class="btn btn-sm btn-success btn-manage-save">Save</button>
+     </div>
+    </div>
    </div>
   `;
 
-  card.querySelector('.btn-effect-delete').addEventListener('click', () => {
+  // --- Edit View Events ---
+  const typeSelect = card.querySelector('.sm-edit-effect-type');
+  const paramGroup = card.querySelector('.sm-edit-param-group');
+  const paramLabelEl = card.querySelector('.sm-edit-param-label');
+  const paramInput = card.querySelector('.sm-edit-param-input');
+
+  typeSelect.addEventListener('change', (e) => {
+   const newType = e.target.value;
+   const newDef = SM_EFFECT_TYPES[newType];
+   item.effectType = newType;
+   if (newDef && newDef.hasParams) {
+    paramGroup.hidden = false;
+    paramLabelEl.textContent = (newDef.paramLabel || 'Level') + ':';
+    paramInput.min = newDef.paramMin !== undefined ? newDef.paramMin : 1;
+    paramInput.max = newDef.paramMax !== undefined ? newDef.paramMax : 10;
+    if (!item.params) item.params = {};
+    if (item.params.value === undefined) {
+     item.params.value = newDef.paramDefault !== undefined ? newDef.paramDefault : 5;
+    }
+    item.params.value = Math.max(paramInput.min, Math.min(paramInput.max, item.params.value));
+    item.params.repeatCount = Math.round(item.params.value);
+    paramInput.value = item.params.value;
+   } else {
+    paramGroup.hidden = true;
+    item.params = {};
+   }
+   renderSmShortcutsTable();
+   updateCardSummaryText();
+  });
+
+  const onParamChange = (e) => {
+   const currentDef = SM_EFFECT_TYPES[item.effectType];
+   if (currentDef && currentDef.hasParams) {
+    if (!item.params) item.params = {};
+    const val = parseFloat(e.target.value) || currentDef.paramDefault || 5;
+    item.params.value = val;
+    item.params.repeatCount = parseInt(e.target.value) || currentDef.paramDefault || 3;
+    renderSmShortcutsTable();
+    updateCardSummaryText();
+   }
+  };
+  paramInput.addEventListener('input', onParamChange);
+  paramInput.addEventListener('change', onParamChange);
+
+  const targetSelect = card.querySelector('.sm-edit-effect-target');
+  targetSelect.addEventListener('change', (e) => {
+   item.target = e.target.value;
+   renderSmShortcutsTable();
+   updateCardSummaryText();
+  });
+
+  const keyInput = card.querySelector('.sm-edit-key');
+  keyInput.addEventListener('change', (e) => {
+   const val = e.target.value.trim().toLowerCase();
+   const overlayConflict = smOverlays.find(o => o.key.toLowerCase() === val);
+   const effectConflict = smEffects.find((ef, i) => i !== idx && ef.key.toLowerCase() === val);
+   if (val && !overlayConflict && !effectConflict) {
+    item.key = val;
+    renderSmShortcutsTable();
+    updateCardSummaryText();
+   } else {
+    e.target.value = item.key.toUpperCase();
+    announce("Invalid or duplicate shortcut key.", true);
+   }
+  });
+
+  function updateCardSummaryText() {
+   const curDef = SM_EFFECT_TYPES[item.effectType];
+   const curTypeName = curDef ? curDef.name : item.effectType;
+   const curTargetNames = { all: 'Everything', base_only: 'Base Only', overlays_only: 'Overlays Only' };
+   const curTargetText = curTargetNames[item.target] || item.target;
+   let curParamText = '';
+   if (curDef && curDef.hasParams && item.params && item.params.value !== undefined) {
+    curParamText = `, ${curDef.paramLabel || 'Level'}: ${item.params.value}`;
+   }
+   const newText = `${curTypeName}, Key: ${item.key.toUpperCase()}, Target: ${curTargetText}${curParamText}`;
+   card.querySelector('.btn-manage-edit').textContent = `Edit ${newText}`;
+   card.querySelector('.btn-manage-delete').textContent = `Remove ${newText}`;
+  }
+
+  card.querySelector('.btn-manage-save').addEventListener('click', () => {
+   announce("Changes saved.", true);
+   smManageEffectEditId = null;
+   card.querySelector('.sm-edit-view').hidden = true;
+   card.querySelector('.sm-summary-view').hidden = false;
+   card.querySelector('.btn-manage-edit').focus();
+  });
+
+  // --- Summary View Events ---
+  card.querySelector('.btn-manage-edit').addEventListener('click', () => {
+   document.querySelectorAll('#sm-manage-effects-list .sm-card').forEach(c => {
+    c.querySelector('.sm-edit-view').hidden = true;
+    c.querySelector('.sm-summary-view').hidden = false;
+   });
+   smManageEffectEditId = item.id;
+   card.querySelector('.sm-summary-view').hidden = true;
+   card.querySelector('.sm-edit-view').hidden = false;
+   card.querySelector('.sm-edit-effect-type').focus();
+  });
+
+  card.querySelector('.btn-manage-delete').addEventListener('click', () => {
+   const curDef = SM_EFFECT_TYPES[item.effectType];
+   const curTypeName = curDef ? curDef.name : item.effectType;
    smEffects.splice(idx, 1);
+
    renderManageEffectsList();
    renderSmShortcutsTable();
-   announce(`Deleted effect ${typeName}.`, true);
+
+   const newDeleteBtns = document.querySelectorAll('#sm-manage-effects-list .btn-manage-delete');
+   if (newDeleteBtns.length > 0) {
+    const targetIdx = Math.min(idx, newDeleteBtns.length - 1);
+    newDeleteBtns[targetIdx].focus();
+   } else {
+    document.getElementById('btn-sm-manage-effects-close').focus();
+   }
+   announce(`Deleted effect ${curTypeName}.`, true);
   });
 
   listContainer.appendChild(card);
