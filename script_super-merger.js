@@ -70,6 +70,35 @@ function matchesShortcutKey(configuredKey, e) {
 }
 window.matchesShortcutKey = matchesShortcutKey;
 
+function isShortcutConflict(newKey, ignoreOverlayIndex = -1, ignoreEffectIndex = -1) {
+  if (!newKey) return null;
+  const targetRaw = newKey.trim().toLowerCase();
+  const targetCanon = smCanonicalKey(targetRaw);
+
+  if (typeof smOverlays !== 'undefined' && Array.isArray(smOverlays)) {
+    const overlayMatch = smOverlays.find((o, idx) => {
+      if (idx === ignoreOverlayIndex) return false;
+      const oRaw = (o.key || '').trim().toLowerCase();
+      const oCanon = smCanonicalKey(oRaw);
+      return oRaw === targetRaw || oCanon === targetCanon || oRaw === targetCanon || oCanon === targetRaw;
+    });
+    if (overlayMatch) return overlayMatch;
+  }
+
+  if (typeof smEffects !== 'undefined' && Array.isArray(smEffects)) {
+    const effectMatch = smEffects.find((ef, idx) => {
+      if (idx === ignoreEffectIndex) return false;
+      const efRaw = (ef.key || '').trim().toLowerCase();
+      const efCanon = smCanonicalKey(efRaw);
+      return efRaw === targetRaw || efCanon === targetCanon || efRaw === targetCanon || efCanon === targetRaw;
+    });
+    if (effectMatch) return effectMatch;
+  }
+
+  return null;
+}
+window.isShortcutConflict = isShortcutConflict;
+
 function initSuperMode() {
  const enterBtn = document.getElementById('btn-enter-super-mode');
  const overlay = document.getElementById('super-mode-overlay');
@@ -131,10 +160,11 @@ function initSuperMode() {
  if (!assetId) { announce('Please select an audio file.', true); return; }
  if (!rawKey) { announce('Please type a shortcut key.', true); return; }
 
- const exists = smOverlays.find(o =>o.key.toLowerCase() === rawKey);
+ const exists = isShortcutConflict(rawKey);
  if (exists) {
      const keyInput = document.getElementById('sm-overlay-key');
-     keyInput.setCustomValidity(`The key "${rawKey.toUpperCase()}" is already assigned to "${exists.name}". Choose a different key.`);
+     const conflictName = exists.name || (SM_EFFECT_TYPES[exists.effectType]?.name || 'another item');
+     keyInput.setCustomValidity(`The key "${rawKey.toUpperCase()}" is already assigned to "${conflictName}". Choose a different key.`);
      keyInput.reportValidity();
      return;
  }
@@ -246,10 +276,10 @@ function initSuperMode() {
   if (!rawKey) { announce('Please type a shortcut key.', true); return; }
 
   // Check for duplicate keys across overlays AND effects
-  const overlayConflict = smOverlays.find(o => o.key.toLowerCase() === rawKey);
-  const effectConflict = smEffects.find(ef => ef.key.toLowerCase() === rawKey);
-  if (overlayConflict || effectConflict) {
-   effectKeyInput.setCustomValidity(`The key "${rawKey.toUpperCase()}" is already assigned. Choose a different key.`);
+  const conflict = isShortcutConflict(rawKey);
+  if (conflict) {
+   const conflictName = conflict.name || (SM_EFFECT_TYPES[conflict.effectType]?.name || 'another item');
+   effectKeyInput.setCustomValidity(`The key "${rawKey.toUpperCase()}" is already assigned to "${conflictName}". Choose a different key.`);
    effectKeyInput.reportValidity();
    return;
   }
@@ -941,8 +971,9 @@ function renderManageOverlaysList() {
         });
         
         card.querySelector('.sm-edit-key').addEventListener('change', (e) =>{
-            const val = e.target.value.toLowerCase();
-            if (val && !smOverlays.find((o, i) =>i !== idx && o.key.toLowerCase() === val)) {
+            const val = e.target.value.trim().toLowerCase();
+            const conflict = isShortcutConflict(val, idx, -1);
+            if (val && !conflict) {
                 item.key = val;
                 renderSmShortcutsTable();
                 updateCardSummaryText();
@@ -2037,9 +2068,8 @@ function renderManageEffectsList() {
   const keyInput = card.querySelector('.sm-edit-key');
   keyInput.addEventListener('change', (e) => {
    const val = e.target.value.trim().toLowerCase();
-   const overlayConflict = smOverlays.find(o => o.key.toLowerCase() === val);
-   const effectConflict = smEffects.find((ef, i) => i !== idx && ef.key.toLowerCase() === val);
-   if (val && !overlayConflict && !effectConflict) {
+   const conflict = isShortcutConflict(val, -1, idx);
+   if (val && !conflict) {
     item.key = val;
     renderSmShortcutsTable();
     updateCardSummaryText();
@@ -2118,11 +2148,28 @@ class WebAudioPlayer {
  this.isPlaying = false;
  this.playStartTime = 0;
  this.pausedOffset = 0;
- this.volume = 1.0;
+ this._volume = 1.0;
  this.outputNode = null; // Custom output node (e.g. bus node); falls back to masterCompressor
  this.endedTriggered = false; // used by updateSmTimeline to fire once
  this._ended = false; // true only after natural playback completion
  SM_ALL_PLAYERS.add(this);
+ }
+
+ get volume() {
+ return this._volume !== undefined ? this._volume : 1.0;
+ }
+
+ set volume(val) {
+ const num = parseFloat(val);
+ this._volume = isNaN(num) ? 1.0 : Math.max(0, num);
+ if (this.gainNode) {
+   try {
+     const ctx = getAudioCtx();
+     this.gainNode.gain.setTargetAtTime(this._volume, ctx.currentTime, 0.015);
+   } catch (_) {
+     this.gainNode.gain.value = this._volume;
+   }
+ }
  }
 
  get duration() {
