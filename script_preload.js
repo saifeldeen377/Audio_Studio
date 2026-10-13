@@ -68,7 +68,7 @@ async function preloadAssets() {
  ctx2d.font = 'bold 40px "Outfit", sans-serif';
  ctx2d.textAlign = 'center';
  ctx2d.textBaseline = 'middle';
- ctx2d.fillText('ACCESSIBLE MEDIA STUDIO', 400, 200);
+ ctx2d.fillText('Audio_Studio', 400, 200);
  
  ctx2d.fillStyle = 'rgba(255, 255, 255, 0.6)';
  ctx2d.font = '20px "Outfit", sans-serif';

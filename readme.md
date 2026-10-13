@@ -1,8 +1,8 @@
-# Accessible Media Studio
+# Audio_Studio
 
 **Open Source · Browser-Only · Accessible**
 
-**An accessibility-first media studio that lets anyone edit audio and video entirely with a keyboard.**
+**An accessibility-first audio workstation that lets anyone edit, trim, and mix audio entirely with a keyboard.**
 
 - **Fully local — No Server**
 - **NVDA / JAWS / VoiceOver**
@@ -14,9 +14,9 @@
 
 ## Why This Project?
 
-Most media editing tools — whether desktop software or online services — are visually driven. Their interfaces rely heavily on timelines you drag, waveforms you click on, and menus that open with a right-click. For people who are blind or have low vision and rely on screen readers like **NVDA**, **JAWS**, or **VoiceOver**, these tools are essentially unusable.
+Most audio editing tools and digital audio workstations (DAWs) — whether desktop software or online services — are visually driven. Their interfaces rely heavily on timelines you drag, waveforms you click on, and menus that open with a right-click. For people who are blind or have low vision and rely on screen readers like **NVDA**, **JAWS**, or **VoiceOver**, these tools are essentially unusable.
 
-This project was built to answer a simple question: _What if a media studio was designed for keyboard and screen reader users from day one — not as an afterthought?_
+This project was built to answer a simple question: _What if an audio workstation was designed for keyboard and screen reader users from day one — not as an afterthought?_
 
 - **Accessibility First**: Every feature was designed to work fully via keyboard. No drag-and-drop. No visual-only controls. Every element has a label.
 - **Privacy by Default**: Your files never leave your device. No uploads, no accounts, no cloud. Everything is processed locally in your browser.
@@ -50,7 +50,7 @@ This project was built to answer a simple question: _What if a media studio was 
 
 ### Option A — Play Online (Easiest)
 You can use the studio directly in your browser without downloading anything:
- **[Accessible Media Studio - Live Version](https://saifeldeen377.github.io/accessible_media_studio/)**
+ **[Audio_Studio - Live Version](https://saifeldeen377.github.io/audio_studio/)**
 
 ### Option B — Open locally
 1. Download or clone this project folder.
@@ -360,7 +360,7 @@ All tools and the media library use smart, accessible preview buttons:
 ### Comparison
 
 
-| Feature | Accessible Media Studio | Traditional Editors |
+| Feature | Audio_Studio | Traditional Editors |
 | ------- | ----------------------- | ------------------- |
 | **Workflow** | Keyboard-centric & Live Mixing | Mouse-centric Visual Timelines |
 | **Accessibility** | Designed for screen readers | Primarily designed for visual workflows |
@@ -400,7 +400,7 @@ All tools and the media library use smart, accessible preview buttons:
 
 ### File Structure
 ```text
-accessible_media_studio/
+audio_studio/
 ├── index.html # App structure, ARIA markup, all tool panels
 ├── readme.md # Documentation (Markdown format)
 ├── readme.html # Documentation (HTML format)
@@ -436,4 +436,4 @@ We designed this app to feel completely natural for screen reader users (like NV
 
 
 ---
-*Built with care for accessibility. Everyone deserves powerful tools. · Accessible Media Studio*
+*Built with care for accessibility. Everyone deserves powerful tools. · Audio_Studio*

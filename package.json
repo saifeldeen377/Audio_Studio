@@ -1,5 +1,5 @@
 {
-  "name": "accessible-media-studio",
+  "name": "audio_studio",
   "version": "1.7.1",
   "description": "Merge, trim, and convert audio and video files in the browser.",
   "scripts": {
