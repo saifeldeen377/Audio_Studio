@@ -630,11 +630,12 @@ window.onerror = function(msg, url, line, col, error) {
     
     <!-- role="application" forces Focus Mode so Spacebar passes directly to JavaScript -->
     <div id="calibration-instructions" role="application" aria-roledescription="Calibration Area" aria-labelledby="calibration-title" tabindex="0" style="margin-bottom: 20px; line-height: 1.6; outline: none;">
-        We will play a rhythmic ticking sound. Please tap the <strong>Spacebar</strong>exactly in sync with each "tick" you hear. Do this 5 times consecutively. Press <strong>Escape</strong>anytime to cancel.
+        For Bluetooth wireless headphones only. We will play 3 prep ticks so you can catch the tempo, then tap <strong>Spacebar</strong> in sync with each following tick. If you are using laptop speakers or wired headphones, click <strong>Reset to 0 ms</strong>. Press <strong>Escape</strong> anytime to cancel.
     </div>
     
-    <div style="text-align: center; margin-bottom: 20px;">
+    <div style="display: flex; justify-content: center; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
         <button type="button" id="btn-start-calibration" class="btn btn-success">Press here or Spacebar to Start</button>
+        <button type="button" id="btn-reset-calibration" class="btn btn-secondary">Reset to 0 ms (No Headphones / Wired)</button>
     </div>
     
     <div id="calibration-status" aria-live="assertive" style="font-weight: bold; text-align: center; min-height: 24px;"></div>

@@ -38,6 +38,7 @@ function initMergeVideo() {
   let mvIsPreviewing = false;
   let mvPreviewClipIndex = 0;
   let mvActiveVideoElement = null;
+  let mvHasEnded = false;
 
   function stopMvPreview() {
     container.innerHTML = '';
@@ -59,6 +60,8 @@ function initMergeVideo() {
 
   function playNextMvClip() {
     if (mvPreviewClipIndex >= mvClips.length) {
+      mvHasEnded = true;
+      window.lastEndedPreview = 'merge-video';
       stopMvPreview();
       statusEl.textContent = '';
 
@@ -123,7 +126,11 @@ function initMergeVideo() {
       return;
     }
 
+    if (typeof window.stopAllStudioPreviews === 'function') {
+      window.stopAllStudioPreviews('merge-video');
+    }
     mvIsPreviewing = true;
+    mvHasEnded = false;
     btnPreview.textContent = 'Pause Mix';
     btnPreview.setAttribute('aria-label', `Pause video mix preview`);
     btnReplay.style.display = 'inline-block';
@@ -133,6 +140,7 @@ function initMergeVideo() {
 
   btnReplay.addEventListener('click', () =>{
     mvPreviewClipIndex = 0;
+    mvHasEnded = false;
     if (mvActiveVideoElement) {
       mvActiveVideoElement.pause();
     }
@@ -141,10 +149,88 @@ function initMergeVideo() {
   });
 
   btnStop.addEventListener('click', () =>{
+    mvHasEnded = false;
+    window.lastEndedPreview = null;
     stopMvPreview();
     statusEl.textContent = '';
     btnPreview.focus();
   });
+
+  window.seekMergeVideo = function(seconds) {
+    if (mvIsPreviewing && mvActiveVideoElement) {
+      const clip = mvClips[mvPreviewClipIndex];
+      const cropStart = (clip && clip.cropStart != null) ? clip.cropStart : 0;
+      const cropEnd = (clip && clip.cropEnd != null && clip.cropEnd > 0) ? clip.cropEnd : (mvActiveVideoElement.duration || Infinity);
+      if (seconds < 0) {
+        mvActiveVideoElement.currentTime = Math.max(cropStart, mvActiveVideoElement.currentTime - 5);
+      } else {
+        mvActiveVideoElement.currentTime = Math.min(cropEnd, mvActiveVideoElement.currentTime + 5);
+      }
+      return true;
+    }
+
+    if (seconds < 0 && mvHasEnded && mvClips.length > 0) {
+      const lastIndex = mvClips.length - 1;
+      const lastClip = mvClips[lastIndex];
+      const asset = getAsset(lastClip.assetId);
+      if (!asset) return false;
+
+      mvPreviewClipIndex = lastIndex;
+      container.hidden = false;
+      container.innerHTML = `<video id="vid-mv-preview" src="${asset.objectURL}" autoplay playsinline></video>`;
+      mvActiveVideoElement = document.getElementById('vid-mv-preview');
+      if (!mvActiveVideoElement) return false;
+
+      const cropStart = lastClip.cropStart || 0;
+      const cropEnd = (lastClip.cropEnd != null && lastClip.cropEnd > 0) ? lastClip.cropEnd : null;
+
+      const startPlaybackAtLast5 = () => {
+        const effectiveEnd = (cropEnd != null) ? cropEnd : (mvActiveVideoElement.duration || 10);
+        mvActiveVideoElement.currentTime = Math.max(cropStart, effectiveEnd - 5);
+        mvActiveVideoElement.play().catch(e => console.error(e));
+      };
+
+      if (mvActiveVideoElement.duration && !isNaN(mvActiveVideoElement.duration)) {
+        startPlaybackAtLast5();
+      } else {
+        mvActiveVideoElement.onloadedmetadata = startPlaybackAtLast5;
+      }
+
+      mvIsPreviewing = true;
+      mvHasEnded = false;
+      btnPreview.textContent = 'Pause Mix';
+      btnPreview.setAttribute('aria-label', `Pause video mix preview`);
+      if (btnReplay) btnReplay.style.display = 'inline-block';
+      if (btnStop) btnStop.style.display = 'inline-block';
+      statusEl.textContent = `Previewing clip ${mvPreviewClipIndex + 1} of ${mvClips.length}...`;
+
+      const endBound = (cropEnd != null) ? cropEnd : Infinity;
+      mvActiveVideoElement.ontimeupdate = () => {
+        if (mvActiveVideoElement.currentTime >= endBound) {
+          mvActiveVideoElement.pause();
+          mvPreviewClipIndex++;
+          playNextMvClip();
+        }
+      };
+
+      mvActiveVideoElement.onended = () => {
+        mvPreviewClipIndex++;
+        playNextMvClip();
+      };
+      return true;
+    }
+    return false;
+  };
+
+  window.isMergeVideoPreviewing = function() {
+    return mvIsPreviewing;
+  };
+
+  window.stopMergeVideoPreview = function() {
+    mvHasEnded = false;
+    window.lastEndedPreview = null;
+    stopMvPreview();
+  };
 }
 
 function renderMvTable() {

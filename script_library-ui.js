@@ -168,6 +168,8 @@ window.downloadAsset = function(id) {
 const activeLibraryAudios = {};
 
 function stopAllLibraryPreviews() {
+ window.lastEndedPreview = null;
+ if (window.lastLibraryPreview) window.lastLibraryPreview.hasEnded = false;
  // Stop all background audio elements
  Object.keys(activeLibraryAudios).forEach(key =>{
  activeLibraryAudios[key].pause();
@@ -260,17 +262,21 @@ window.toggleLibraryPreview = function(id) {
      btn.setAttribute('aria-label', `Pause preview for ${asset.name}`);
    }
  } else {
+ if (typeof window.stopAllStudioPreviews === 'function') window.stopAllStudioPreviews('library');
  stopAllLibraryPreviews();
 
  const aud = new Audio(asset.objectURL);
  aud.play().catch(err =>console.error("Preview play failed:", err));
  activeLibraryAudios[id] = aud;
+ window.lastLibraryPreview = { id, type: 'audio', aud, asset, hasEnded: false };
  btn.textContent = 'Pause';
  btn.setAttribute('aria-label', `Pause preview for ${asset.name}`);
  if (replayBtn) replayBtn.style.display = 'inline-block';
  if (stopBtn) stopBtn.style.display = 'inline-block';
 
  aud.onended = () =>{
+ window.lastEndedPreview = 'library';
+ window.lastLibraryPreview = { id, type: 'audio', aud, asset, hasEnded: true };
  delete activeLibraryAudios[id];
  btn.textContent = 'Play';
  btn.setAttribute('aria-label', `Play preview for ${asset.name}`);
@@ -301,6 +307,7 @@ window.toggleLibraryPreview = function(id) {
      btn.setAttribute('aria-label', `Pause video preview for ${asset.name}`);
    }
  } else {
+ if (typeof window.stopAllStudioPreviews === 'function') window.stopAllStudioPreviews('library');
  stopAllLibraryPreviews();
 
  container.hidden = false;
@@ -314,7 +321,10 @@ window.toggleLibraryPreview = function(id) {
  
  const newVid = document.getElementById(`vid-prev-${id}`);
  if (newVid) {
+ window.lastLibraryPreview = { id, type: 'video', vid: newVid, asset, hasEnded: false };
  newVid.onended = () =>{
+ window.lastEndedPreview = 'library';
+ window.lastLibraryPreview = { id, type: 'video', vid: newVid, asset, hasEnded: true };
  btn.textContent = 'Play Video';
  btn.setAttribute('aria-label', `Play video preview for ${asset.name}`);
  if (replayBtn) {
@@ -374,6 +384,8 @@ window.replayLibraryPreview = function(id) {
 };
 
 window.stopLibraryPreview = function(id) {
+  window.lastEndedPreview = null;
+  if (window.lastLibraryPreview) window.lastLibraryPreview.hasEnded = false;
   const btn = document.getElementById(`btn-prev-${id}`);
   const replayBtn = document.getElementById(`btn-replay-${id}`);
   const stopBtn = document.getElementById(`btn-stop-${id}`);
@@ -551,4 +563,127 @@ window.saveBlobToLibrary = function(blob, name, type) {
   renderLibrary();
   populateAllSelects();
   announce(`"${finalName}" saved directly to the library.`);
+};
+
+window.seekLibrary = function(seconds) {
+  // 1. Check if audio preview is active
+  const activeIds = Object.keys(activeLibraryAudios);
+  if (activeIds.length > 0) {
+    const id = activeIds[0];
+    const aud = activeLibraryAudios[id];
+    if (aud && aud.duration) {
+      aud.currentTime = Math.max(0, Math.min(aud.duration, aud.currentTime + seconds));
+      return true;
+    }
+  }
+
+  // 2. Check if video preview is active
+  const activeVid = document.querySelector('[id^="vid-prev-"]');
+  if (activeVid && activeVid.duration && !activeVid.ended) {
+    activeVid.currentTime = Math.max(0, Math.min(activeVid.duration, activeVid.currentTime + seconds));
+    return true;
+  }
+
+  // 3. If file ended and user pressed ArrowLeft (seconds < 0), rewind to last 5 seconds and play!
+  if (seconds < 0 && window.lastLibraryPreview && window.lastLibraryPreview.hasEnded) {
+    const { id, type, asset } = window.lastLibraryPreview;
+    const btn = document.getElementById(`btn-prev-${id}`);
+    const replayBtn = document.getElementById(`btn-replay-${id}`);
+    const stopBtn = document.getElementById(`btn-stop-${id}`);
+    const container = document.getElementById(`preview-container-${id}`);
+
+    if (type === 'audio') {
+      stopAllLibraryPreviews();
+      const aud = new Audio(asset.objectURL);
+      activeLibraryAudios[id] = aud;
+      window.lastLibraryPreview.hasEnded = false;
+      window.lastLibraryPreview.aud = aud;
+
+      const startPlaybackAtLast5 = () => {
+        const startAt = Math.max(0, (aud.duration || 0) - 5);
+        aud.currentTime = startAt;
+        aud.play().catch(e => console.error(e));
+      };
+
+      if (aud.duration && !isNaN(aud.duration)) {
+        startPlaybackAtLast5();
+      } else {
+        aud.onloadedmetadata = startPlaybackAtLast5;
+        aud.play().catch(e => console.error(e));
+      }
+
+      aud.onended = () => {
+        window.lastEndedPreview = 'library';
+        window.lastLibraryPreview = { id, type: 'audio', aud, asset, hasEnded: true };
+        delete activeLibraryAudios[id];
+        if (btn) {
+          btn.textContent = 'Play';
+          btn.setAttribute('aria-label', `Play preview for ${asset.name}`);
+        }
+        if (replayBtn) replayBtn.style.display = 'none';
+        if (stopBtn) stopBtn.style.display = 'none';
+      };
+
+      if (btn) {
+        btn.textContent = 'Pause';
+        btn.setAttribute('aria-label', `Pause preview for ${asset.name}`);
+      }
+      if (replayBtn) replayBtn.style.display = 'inline-block';
+      if (stopBtn) stopBtn.style.display = 'inline-block';
+      return true;
+    } else if (type === 'video') {
+      stopAllLibraryPreviews();
+      if (container) {
+        container.hidden = false;
+        container.innerHTML = `<video id="vid-prev-${id}" src="${asset.objectURL}" autoplay controls playsinline></video>`;
+        const newVid = document.getElementById(`vid-prev-${id}`);
+        if (newVid) {
+          const startVidAtLast5 = () => {
+            newVid.currentTime = Math.max(0, (newVid.duration || 0) - 5);
+            newVid.play().catch(e => console.error(e));
+          };
+          if (newVid.duration && !isNaN(newVid.duration)) {
+            startVidAtLast5();
+          } else {
+            newVid.onloadedmetadata = startVidAtLast5;
+          }
+          window.lastLibraryPreview.hasEnded = false;
+          window.lastLibraryPreview.vid = newVid;
+
+          newVid.onended = () => {
+            window.lastEndedPreview = 'library';
+            window.lastLibraryPreview = { id, type: 'video', asset, hasEnded: true };
+            if (btn) {
+              btn.textContent = 'Play Video';
+              btn.setAttribute('aria-label', `Play video preview for ${asset.name}`);
+            }
+            if (replayBtn) replayBtn.style.display = 'none';
+            if (stopBtn) stopBtn.style.display = 'none';
+            container.innerHTML = '';
+            container.hidden = true;
+          };
+        }
+      }
+      if (btn) {
+        btn.textContent = 'Pause Video';
+        btn.setAttribute('aria-label', `Pause video preview for ${asset.name}`);
+      }
+      if (replayBtn) replayBtn.style.display = 'inline-block';
+      if (stopBtn) stopBtn.style.display = 'inline-block';
+      return true;
+    }
+  }
+
+  return false;
+};
+
+window.isLibraryPreviewing = function() {
+  if (Object.keys(activeLibraryAudios).length > 0) return true;
+  const activeVid = document.querySelector('[id^="vid-prev-"]');
+  if (activeVid && !activeVid.paused && !activeVid.ended) return true;
+  return false;
+};
+
+window.stopLibraryPreviews = function() {
+  stopAllLibraryPreviews();
 };

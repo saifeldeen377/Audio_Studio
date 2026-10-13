@@ -336,10 +336,12 @@ Strip the audio track out of a video and save it as a WAV file.
 Accessibility is not a feature here — it's the foundation.
 
 ### Smart Preview Controls
-All tools and the media library use smart, accessible preview buttons:
+All tools and the media library use smart, accessible preview buttons and playback management:
 - **Play/Pause/Resume**: Toggles the preview. The button label naturally updates, allowing screen readers to announce the state automatically without annoying extra notifications.
-- **Stop**: Hard stops the preview and resets to 0.0s. It is hidden by default, appears only when playing/paused, and disappears when stopped. If triggered by a screen reader or keyboard, focus is safely forced back to the Play button so you never lose your place.
+- **Stop**: Hard stops the preview and resets to 0.0s. It is hidden by default, appears only when playing/paused, and disappears when stopped. If triggered by a screen reader or keyboard, focus is safely forced back to the Play button so you never lose your place. Pressing Stop also fully deactivates arrow key seeking to prevent accidental playback resumption.
 - **Replay**: Rewinds the preview to 0.0s and continues playing. Like the Stop button, it auto-hides when not needed and safely transfers focus back to Play if activated while visually hidden.
+- **Single-Stream Engine (Zero Audio Overlap)**: Playing any preview in the library or any standard tool instantly and automatically stops whatever was previously playing. Switching tabs also halts background playback, ensuring only one clean audio or video stream plays at a time.
+- **Arrow Key Seeking & Natural End Rewind**: During any active preview, pressing Left Arrow (`←`) or Right Arrow (`→`) seeks backward or forward by 5 seconds with zero screen reader speech interruption. If a track reaches its natural end, pressing Left Arrow (`←`) automatically resumes and plays the final 5 seconds. Once explicit Stop is clicked, arrow navigation is deactivated.
 
 ### Screen Reader Support
 - ARIA live regions (`aria-live=" polite"` and `aria-live=" assertive"`) announce all events.
@@ -351,7 +353,8 @@ All tools and the media library use smart, accessible preview buttons:
 | Key | Action |
 | :--- | :--- |
 | `Tab` / `Shift+Tab` | Move between all interactive elements |
-| `←` `→` | Navigate between tabs in the tab bar |
+| `←` `→` (In Tab Bar) | Navigate between tabs in the tab bar |
+| `←` `→` (During Preview) | Seek backward / forward 5s silently (or replay last 5s when track naturally finished) |
 | `Enter` / `Space` | Activate buttons and checkboxes |
 | `M` | Open Super Merger from anywhere |
 | `T` | Open Super Trim from anywhere |

@@ -531,11 +531,14 @@ function initSuperMode() {
   const calibrateBtn = document.getElementById('btn-sm-calibrate-headphones');
   const calibrationDialog = document.getElementById('sm-calibration-dialog');
   const startCalibrateBtn = document.getElementById('btn-start-calibration');
+  const resetCalibrateBtn = document.getElementById('btn-reset-calibration');
   const calibrationStatus = document.getElementById('calibration-status');
   const latencyDisplay = document.getElementById('sm-latency-display');
   const calibrationInstructions = document.getElementById('calibration-instructions');
 
   let activeCalibrationTriggerBtn = calibrateBtn;
+  const CALIB_PREP_TICKS = 3;
+  const CALIB_MEASURE_TICKS = 5;
 
   window.openHeadphoneCalibration = function(triggerBtn) {
       activeCalibrationTriggerBtn = triggerBtn || calibrateBtn;
@@ -543,9 +546,10 @@ function initSuperMode() {
       calibrationTicksPlayed = 0;
       calibrationTapsCount = 0;
       tapTimeDiffs.length = 0;
-      if (tickIntervalId) clearInterval(tickIntervalId);
+      if (tickIntervalId) { clearInterval(tickIntervalId); tickIntervalId = null; }
+      window._isCalibrationFinished = false;
       
-      calibrationStatus.textContent = "Ready. Click start or press Space.";
+      calibrationStatus.textContent = "Ready. Click Start or press Space (or Reset to 0 ms).";
       if (calibrationDialog && typeof calibrationDialog.showModal === 'function') {
           calibrationDialog.showModal();
           calibrationInstructions.focus();
@@ -558,13 +562,13 @@ function initSuperMode() {
       });
   }
 
-  function playCalibrationTick(time) {
+  function playCalibrationTick(time, isPrep = false) {
       const ctx = getAudioCtx();
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(800, time); // Tick frequency
+      osc.frequency.setValueAtTime(isPrep ? 1000 : 800, time);
       
       gain.gain.setValueAtTime(0.5, time);
       gain.gain.exponentialRampToValueAtTime(0.001, time + 0.05); // Short 50ms tick
@@ -575,38 +579,80 @@ function initSuperMode() {
       osc.start(time);
       osc.stop(time + 0.06);
       
-      nextTickTime = time; 
       calibrationTicksPlayed++;
   }
 
   function startTicking() {
       if (isCalibrating) return;
+      if (tickIntervalId) { clearInterval(tickIntervalId); tickIntervalId = null; }
       isCalibrating = true;
-      calibrationStatus.textContent = "Listen and tap Space in sync! (0/5)";
+      calibrationTicksPlayed = 0;
+      calibrationTapsCount = 0;
+      tapTimeDiffs.length = 0;
+      window._isCalibrationFinished = false;
+
+      calibrationStatus.textContent = "Listen to the tempo";
+      announce("Listen to the tempo");
       
       const ctx = getAudioCtx();
       if (ctx.state === 'suspended') ctx.resume();
       
-      calibrationStartTime = ctx.currentTime + 1.0;
-      playCalibrationTick(calibrationStartTime);
+      calibrationStartTime = ctx.currentTime + 0.8;
+      playCalibrationTick(calibrationStartTime, true);
       
       let tickCount = 1;
       tickIntervalId = setInterval(() =>{
-          playCalibrationTick(calibrationStartTime + tickCount);
+          const nextTime = calibrationStartTime + tickCount;
+          const isPrep = tickCount < CALIB_PREP_TICKS;
+          playCalibrationTick(nextTime, isPrep);
+          
+          if (tickCount === CALIB_PREP_TICKS) {
+              calibrationStatus.textContent = "Now tap in sync";
+              announce("Now tap in sync");
+          }
           tickCount++;
       }, 1000);
   }
 
-  startCalibrateBtn.addEventListener('click', (e) =>{
-      e.stopPropagation();
-      startTicking();
-      calibrationInstructions.focus(); // Keep focus trapped in application mode
-  });
+  if (startCalibrateBtn) {
+      startCalibrateBtn.addEventListener('click', (e) =>{
+          e.stopPropagation();
+          startTicking();
+          calibrationInstructions.focus(); // Keep focus trapped in application mode
+      });
+  }
+
+  if (resetCalibrateBtn) {
+      resetCalibrateBtn.addEventListener('click', (e) =>{
+          e.stopPropagation();
+          if (tickIntervalId) { clearInterval(tickIntervalId); tickIntervalId = null; }
+          isCalibrating = false;
+          calibrationTicksPlayed = 0;
+          calibrationTapsCount = 0;
+          tapTimeDiffs.length = 0;
+          
+          if (typeof window.resetHeadphoneLatency === 'function') {
+              window.resetHeadphoneLatency();
+          } else {
+              smHeadphoneLatencySec = 0;
+              amsHeadphoneLatencySec = 0;
+              try { localStorage.setItem('ams_headphone_latency_sec', '0'); } catch(_) {}
+              updateAllLatencyDisplays();
+          }
+          calibrationStatus.textContent = "Delay reset to 0 ms.";
+          
+          setTimeout(() =>{
+              calibrationDialog.close();
+              if (activeCalibrationTriggerBtn) activeCalibrationTriggerBtn.focus();
+              else if (calibrateBtn) calibrateBtn.focus();
+          }, 400);
+      });
+  }
 
   calibrationDialog.addEventListener('keydown', (e) =>{
       if (e.key === 'Escape') {
           e.stopPropagation(); // Prevent exiting super mode
-          if (tickIntervalId) clearInterval(tickIntervalId);
+          if (tickIntervalId) { clearInterval(tickIntervalId); tickIntervalId = null; }
           isCalibrating = false;
           calibrationDialog.close();
           if (activeCalibrationTriggerBtn) activeCalibrationTriggerBtn.focus();
@@ -625,7 +671,8 @@ function initSuperMode() {
               return;
           }
           
-          if (calibrationTicksPlayed === 0) return;
+          // During intro prep ticks, let user lock into the tempo
+          if (calibrationTicksPlayed <= CALIB_PREP_TICKS) return;
           
           const ctx = getAudioCtx();
           const userTapTime = ctx.currentTime;
@@ -636,31 +683,32 @@ function initSuperMode() {
           
           let diff = userTapTime - expectedTickTime;
           
-          tapTimeDiffs.push(diff);
-          calibrationTapsCount++;
+          // Discard outliers outside +/- 0.5s of beat
+          if (Math.abs(diff) < 0.6) {
+              tapTimeDiffs.push(diff);
+              calibrationTapsCount++;
+          }
           
-          // Removed text update here so screen reader doesn't speak over ticks
-          
-          if (calibrationTapsCount >= 5) {
-              clearInterval(tickIntervalId);
+          if (calibrationTapsCount >= CALIB_MEASURE_TICKS) {
+              if (tickIntervalId) { clearInterval(tickIntervalId); tickIntervalId = null; }
               isCalibrating = false;
               
               // Calculate average latency
               const sum = tapTimeDiffs.reduce((a, b) =>a + b, 0);
               let avgLatency = sum / tapTimeDiffs.length;
               
-              // Floor negative or tiny positive values to 0
-              if (avgLatency < 0.02) avgLatency = 0; 
+              if (avgLatency < 0) avgLatency = 0; 
+              if (avgLatency > 1.0) avgLatency = 1.0;
               
               smHeadphoneLatencySec = avgLatency;
               amsHeadphoneLatencySec = avgLatency;
               try { localStorage.setItem('ams_headphone_latency_sec', avgLatency.toString()); } catch(_) {}
               const smComp = document.getElementById('sm-headphone-compensation');
-              if (smComp) smComp.checked = true;
+              if (smComp) smComp.checked = (avgLatency > 0);
               const staComp = document.getElementById('sta-headphone-compensation');
-              if (staComp) staComp.checked = true;
+              if (staComp) staComp.checked = (avgLatency > 0);
               const sctComp = document.getElementById('sct-headphone-compensation');
-              if (sctComp) sctComp.checked = true;
+              if (sctComp) sctComp.checked = (avgLatency > 0);
               updateAllLatencyDisplays();
               
               const ms = Math.round(smHeadphoneLatencySec * 1000);

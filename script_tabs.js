@@ -21,6 +21,9 @@ function initTabs() {
 }
 
 function activateTab(tab, tabs) {
+ if (typeof window.stopAllStudioPreviews === 'function') {
+  window.stopAllStudioPreviews();
+ }
  tabs.forEach(t =>{
  t.setAttribute('aria-selected', 'false');
  t.classList.remove('active');

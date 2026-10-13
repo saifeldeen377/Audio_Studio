@@ -33,6 +33,7 @@ function initTrimAudio() {
   let taPreviewOffset = 0;
   let taPreviewStartTime = 0;
   let taIsPreviewing = false;
+  let taHasEnded = false;
   
   const btnPreview = document.getElementById('btn-ta-preview');
   const btnReplay = document.getElementById('btn-ta-replay-preview');
@@ -65,6 +66,11 @@ function initTrimAudio() {
     return;
   }
 
+  if (typeof window.stopAllStudioPreviews === 'function') {
+    window.stopAllStudioPreviews('trim-audio');
+  }
+  taHasEnded = false;
+
   if (taPreviewOffset >= dur) taPreviewOffset = 0;
 
   statusEl.textContent = 'Loading preview…';
@@ -85,6 +91,8 @@ function initTrimAudio() {
   
   trimPreviewSource.onended = () =>{ 
     if (!taIsPreviewing) return; // Means it was paused
+    window.lastEndedPreview = 'trim-audio';
+    taHasEnded = true;
     taIsPreviewing = false;
     taPreviewOffset = 0;
     btnPreview.textContent = 'Preview Trim';
@@ -112,6 +120,8 @@ function initTrimAudio() {
   });
 
   document.getElementById('btn-ta-stop').addEventListener('click', () =>{
+  window.lastEndedPreview = null;
+  taHasEnded = false;
   if (trimPreviewSource) { try { trimPreviewSource.stop(); } catch (_) {} trimPreviewSource = null; }
   taIsPreviewing = false;
   taPreviewOffset = 0;
@@ -126,6 +136,107 @@ function initTrimAudio() {
   statusEl.textContent = '';
   btnPreview.focus();
   });
+
+  window.seekTrimAudio = async function(seconds) {
+    const assetId = document.getElementById('ta-audio-select')?.value;
+    if (!assetId) return;
+    const asset = getAsset(assetId);
+    if (!asset) return;
+    let buffer;
+    try {
+      buffer = await getTrimBuffer(asset);
+    } catch (_) {
+      return;
+    }
+    if (!buffer) return;
+
+    const start = parseFloat(document.getElementById('ta-start')?.value) || 0;
+    const endRaw = document.getElementById('ta-end')?.value;
+    let end = endRaw ? parseFloat(endRaw) : buffer.duration;
+    if (end > buffer.duration) end = buffer.duration;
+    const dur = end - start;
+    if (dur <= 0) return;
+
+    const ctx = getAudioCtx();
+    if (taIsPreviewing) {
+      let currentOffset = taPreviewOffset + (ctx.currentTime - taPreviewStartTime);
+      let newOffset = Math.max(0, Math.min(dur, currentOffset + seconds));
+      taPreviewOffset = newOffset;
+
+      if (trimPreviewSource) {
+        trimPreviewSource.onended = null;
+        try { trimPreviewSource.stop(); } catch (_) {}
+      }
+      trimPreviewSource = ctx.createBufferSource();
+      trimPreviewSource.buffer = buffer;
+      trimPreviewSource.connect(ctx.destination);
+      trimPreviewSource.start(0, start + taPreviewOffset, dur - taPreviewOffset);
+      taPreviewStartTime = ctx.currentTime;
+      trimPreviewSource.onended = () => {
+        if (!taIsPreviewing) return;
+        window.lastEndedPreview = 'trim-audio';
+        taIsPreviewing = false;
+        taPreviewOffset = 0;
+        btnPreview.textContent = 'Preview Trim';
+        btnPreview.setAttribute('aria-label', `Preview trim`);
+        if (btnReplay) btnReplay.style.display = 'none';
+        if (btnStop) btnStop.style.display = 'none';
+        statusEl.textContent = '';
+      };
+      return true;
+    }
+
+    if (seconds < 0 && taHasEnded) {
+      if (ctx.state === 'suspended') { ctx.resume(); }
+      taPreviewOffset = Math.max(0, dur - 5);
+      if (trimPreviewSource) {
+        trimPreviewSource.onended = null;
+        try { trimPreviewSource.stop(); } catch (_) {}
+      }
+      trimPreviewSource = ctx.createBufferSource();
+      trimPreviewSource.buffer = buffer;
+      trimPreviewSource.connect(ctx.destination);
+      trimPreviewSource.start(0, start + taPreviewOffset, dur - taPreviewOffset);
+      taPreviewStartTime = ctx.currentTime;
+      taIsPreviewing = true;
+      btnPreview.textContent = 'Pause Trim';
+      btnPreview.setAttribute('aria-label', `Pause trim preview`);
+      if (btnReplay) btnReplay.style.display = 'inline-block';
+      if (btnStop) btnStop.style.display = 'inline-block';
+      statusEl.textContent = '';
+      trimPreviewSource.onended = () => {
+        if (!taIsPreviewing) return;
+        window.lastEndedPreview = 'trim-audio';
+        taHasEnded = true;
+        taIsPreviewing = false;
+        taPreviewOffset = 0;
+        btnPreview.textContent = 'Preview Trim';
+        btnPreview.setAttribute('aria-label', `Preview trim`);
+        if (btnReplay) btnReplay.style.display = 'none';
+        if (btnStop) btnStop.style.display = 'none';
+        statusEl.textContent = '';
+      };
+      return true;
+    }
+    return false;
+  };
+
+  window.isTrimAudioPreviewing = function() {
+    return taIsPreviewing;
+  };
+
+  window.stopTrimAudioPreview = function() {
+    window.lastEndedPreview = null;
+    taHasEnded = false;
+    if (trimPreviewSource) { try { trimPreviewSource.stop(); } catch (_) {} trimPreviewSource = null; }
+    taIsPreviewing = false;
+    taPreviewOffset = 0;
+    btnPreview.textContent = 'Preview Trim';
+    btnPreview.setAttribute('aria-label', `Preview trim`);
+    if (btnReplay) btnReplay.style.display = 'none';
+    if (btnStop) btnStop.style.display = 'none';
+    statusEl.textContent = '';
+  };
 
   const performTrimAudioExport = async (isSaveToLib) =>{
  if (isExportingMedia) { alert('An export is already in progress. Please wait.'); return; }

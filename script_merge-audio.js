@@ -144,6 +144,7 @@ async function buildMixedBuffer() {
 let maPreviewOffset = 0;
 let maPreviewStartTime = 0;
 let maIsPreviewing = false;
+let maHasEnded = false;
 let maPreviewBuffer = null;
 
 async function previewMergeAudio() {
@@ -159,6 +160,11 @@ async function previewMergeAudio() {
     btnPreview.setAttribute('aria-label', `Resume mix preview`);
     return;
   }
+
+  if (typeof window.stopAllStudioPreviews === 'function') {
+    window.stopAllStudioPreviews('merge-audio');
+  }
+  maHasEnded = false;
 
   if (!maPreviewBuffer || maPreviewOffset === 0) {
     // btnPreview.textContent = 'Rendering...';
@@ -187,6 +193,8 @@ async function previewMergeAudio() {
 
   previewSource.onended = () =>{
     if (!maIsPreviewing) return; // Means it was paused
+    window.lastEndedPreview = 'merge-audio';
+    maHasEnded = true;
     maIsPreviewing = false;
     maPreviewOffset = 0;
     btnPreview.textContent = 'Preview Mix';
@@ -202,11 +210,109 @@ async function previewMergeAudio() {
   };
 }
 
+window.seekMergeAudio = function(seconds) {
+  if (!maPreviewBuffer) return false;
+  const ctx = getAudioCtx();
+  const btnPreview = document.getElementById('btn-ma-play');
+  const btnReplay = document.getElementById('btn-ma-replay-preview');
+  const btnStop = document.getElementById('btn-ma-stop');
+
+  if (maIsPreviewing) {
+    let currentOffset = maPreviewOffset + (ctx.currentTime - maPreviewStartTime);
+    let newOffset = Math.max(0, Math.min(maPreviewBuffer.duration, currentOffset + seconds));
+    maPreviewOffset = newOffset;
+
+    if (previewSource) {
+      previewSource.onended = null;
+      try { previewSource.stop(); } catch (_) {}
+    }
+    previewSource = ctx.createBufferSource();
+    previewSource.buffer = maPreviewBuffer;
+    previewSource.connect(ctx.destination);
+    previewSource.start(0, maPreviewOffset);
+    maPreviewStartTime = ctx.currentTime;
+    previewSource.onended = () => {
+      if (!maIsPreviewing) return;
+      window.lastEndedPreview = 'merge-audio';
+      maHasEnded = true;
+      maIsPreviewing = false;
+      maPreviewOffset = 0;
+      if (btnPreview) {
+        btnPreview.textContent = 'Preview Mix';
+        btnPreview.setAttribute('aria-label', `Preview mix`);
+      }
+      if (btnReplay) {
+        if (document.activeElement === btnReplay && btnPreview) btnPreview.focus();
+        btnReplay.style.display = 'none';
+      }
+      if (btnStop) {
+        if (document.activeElement === btnStop && btnPreview) btnPreview.focus();
+        btnStop.style.display = 'none';
+      }
+    };
+    return true;
+  }
+
+  if (seconds < 0 && maHasEnded) {
+    if (ctx.state === 'suspended') { ctx.resume(); }
+    maPreviewOffset = Math.max(0, maPreviewBuffer.duration - 5);
+    if (previewSource) {
+      previewSource.onended = null;
+      try { previewSource.stop(); } catch (_) {}
+    }
+    previewSource = ctx.createBufferSource();
+    previewSource.buffer = maPreviewBuffer;
+    previewSource.connect(ctx.destination);
+    previewSource.start(0, maPreviewOffset);
+    maPreviewStartTime = ctx.currentTime;
+    maIsPreviewing = true;
+    maHasEnded = false;
+    if (btnPreview) {
+      btnPreview.textContent = 'Pause Mix';
+      btnPreview.setAttribute('aria-label', `Pause mix preview`);
+    }
+    if (btnReplay) btnReplay.style.display = 'inline-block';
+    if (btnStop) btnStop.style.display = 'inline-block';
+    previewSource.onended = () => {
+      if (!maIsPreviewing) return;
+      window.lastEndedPreview = 'merge-audio';
+      maHasEnded = true;
+      maIsPreviewing = false;
+      maPreviewOffset = 0;
+      if (btnPreview) {
+        btnPreview.textContent = 'Preview Mix';
+        btnPreview.setAttribute('aria-label', `Preview mix`);
+      }
+      if (btnReplay) {
+        if (document.activeElement === btnReplay && btnPreview) btnPreview.focus();
+        btnReplay.style.display = 'none';
+      }
+      if (btnStop) {
+        if (document.activeElement === btnStop && btnPreview) btnPreview.focus();
+        btnStop.style.display = 'none';
+      }
+    };
+    return true;
+  }
+  return false;
+};
+
+window.isMergeAudioPreviewing = function() {
+  return maIsPreviewing;
+};
+
+window.stopMergeAudioPreview = function() {
+  stopMergeAudio(true);
+  maHasEnded = false;
+};
+
 function stopMergeAudio(resetOffset = true) {
   if (previewSource) { try { previewSource.stop(); } catch (_) {} previewSource = null; }
   if (resetOffset) {
     maIsPreviewing = false;
     maPreviewOffset = 0;
+    maHasEnded = false;
+    window.lastEndedPreview = null;
     const btnPreview = document.getElementById('btn-ma-play');
     const btnReplay = document.getElementById('btn-ma-replay-preview');
     const btnStop = document.getElementById('btn-ma-stop');

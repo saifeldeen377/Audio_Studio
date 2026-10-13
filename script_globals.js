@@ -76,6 +76,20 @@ function updateAllLatencyDisplays() {
   }
 }
 
+window.resetHeadphoneLatency = function() {
+  amsHeadphoneLatencySec = 0;
+  if (typeof smHeadphoneLatencySec !== 'undefined') smHeadphoneLatencySec = 0;
+  try { localStorage.setItem('ams_headphone_latency_sec', '0'); } catch(_) {}
+  const smComp = document.getElementById('sm-headphone-compensation');
+  if (smComp) smComp.checked = false;
+  const staComp = document.getElementById('sta-headphone-compensation');
+  if (staComp) staComp.checked = false;
+  const sctComp = document.getElementById('sct-headphone-compensation');
+  if (sctComp) sctComp.checked = false;
+  updateAllLatencyDisplays();
+  if (typeof announce === 'function') announce('Headphone delay reset to 0 milliseconds.', true);
+};
+
 // Global listener for toggling compensation checkboxes across tools (silent, letting standard checkbox announce state)
 document.addEventListener('change', (e) => {
   if (e.target && (e.target.id === 'sm-headphone-compensation' || e.target.id === 'sta-headphone-compensation' || e.target.id === 'sct-headphone-compensation')) {
@@ -237,6 +251,45 @@ function triggerReviewPlaybacksAtCurrentTime() {
 }
 
 
+// Stop all studio previews across all tools and library (except the specified tool)
+window.stopAllStudioPreviews = function(exceptTool) {
+  window.lastEndedPreview = null;
+  if (exceptTool !== 'library' && typeof window.stopLibraryPreviews === 'function') {
+    window.stopLibraryPreviews();
+  }
+  if (exceptTool !== 'trim-audio' && typeof window.stopTrimAudioPreview === 'function') {
+    window.stopTrimAudioPreview();
+  }
+  if (exceptTool !== 'merge-audio' && typeof window.stopMergeAudioPreview === 'function') {
+    window.stopMergeAudioPreview();
+  }
+  if (exceptTool !== 'trim-video' && typeof window.stopTrimVideoPreview === 'function') {
+    window.stopTrimVideoPreview();
+  }
+  if (exceptTool !== 'merge-video' && typeof window.stopMergeVideoPreview === 'function') {
+    window.stopMergeVideoPreview();
+  }
+  if (exceptTool !== 'video-audio' && typeof window.stopVideoAudioPreview === 'function') {
+    window.stopVideoAudioPreview();
+  }
+  if (exceptTool !== 'audio-video' && typeof window.stopAudioVideoPreview === 'function') {
+    window.stopAudioVideoPreview();
+  }
+
+  // Safety cleanup: pause any HTMLMediaElements not belonging to exceptTool
+  const isSuperActive = (document.getElementById('panel-super-merger') && !document.getElementById('panel-super-merger').hidden) ||
+                        (document.getElementById('panel-super-trim') && !document.getElementById('panel-super-trim').hidden) ||
+                        (document.getElementById('panel-super-cut') && !document.getElementById('panel-super-cut').hidden);
+  if (!isSuperActive) {
+    document.querySelectorAll('audio, video').forEach(media => {
+      if (exceptTool === 'trim-video' && media.id === 'vid-tv-preview') return;
+      if (exceptTool === 'merge-video' && media.id === 'vid-mv-preview') return;
+      if (exceptTool === 'library' && (media.id.startsWith('vid-prev-') || (typeof activeLibraryAudios !== 'undefined' && activeLibraryAudios[media.dataset?.assetId]))) return;
+      try { media.pause(); } catch (_) {}
+    });
+  }
+};
+
 // Global Preview Arrow Key Handler for Standard Tools & Library
 window.addEventListener('keydown', (e) =>{
   const tag = e.target.tagName.toLowerCase();
@@ -250,43 +303,108 @@ window.addEventListener('keydown', (e) =>{
 
   const seconds = e.key === 'ArrowRight'? 5 : -5;
   
-  // 1. Check Trim Audio
-  const panelTrimAudio = document.getElementById('panel-trim-audio');
-  if (panelTrimAudio && !panelTrimAudio.hidden && typeof window.seekTrimAudio === 'function') {
-    e.preventDefault();
-    window.seekTrimAudio(seconds);
-    return;
+  // 1. If any preview is actively playing, seek that preview immediately
+  if (typeof window.isLibraryPreviewing === 'function' && window.isLibraryPreviewing()) {
+    if (typeof window.seekLibrary === 'function' && window.seekLibrary(seconds)) {
+      e.preventDefault();
+      return;
+    }
   }
-  
-  // 2. Check Video Audio
+
+  const panelTrimVideo = document.getElementById('panel-trim-video');
+  if (panelTrimVideo && !panelTrimVideo.hidden && typeof window.isTrimVideoPreviewing === 'function' && window.isTrimVideoPreviewing()) {
+    if (typeof window.seekTrimVideo === 'function' && window.seekTrimVideo(seconds)) {
+      e.preventDefault();
+      return;
+    }
+  }
+
+  const panelMergeVideo = document.getElementById('panel-merge-video');
+  if (panelMergeVideo && !panelMergeVideo.hidden && typeof window.isMergeVideoPreviewing === 'function' && window.isMergeVideoPreviewing()) {
+    if (typeof window.seekMergeVideo === 'function' && window.seekMergeVideo(seconds)) {
+      e.preventDefault();
+      return;
+    }
+  }
+
   const panelVideoAudio = document.getElementById('panel-video-to-audio');
-  if (panelVideoAudio && !panelVideoAudio.hidden && typeof window.seekVideoAudio === 'function') {
-    e.preventDefault();
-    window.seekVideoAudio(seconds);
-    return;
+  if (panelVideoAudio && !panelVideoAudio.hidden && typeof window.isVideoAudioPreviewing === 'function' && window.isVideoAudioPreviewing()) {
+    if (typeof window.seekVideoAudio === 'function' && window.seekVideoAudio(seconds)) {
+      e.preventDefault();
+      return;
+    }
   }
-  
-  // 3. Check Merge Audio
-  const panelMergeAudio = document.getElementById('panel-merge-audio');
-  if (panelMergeAudio && !panelMergeAudio.hidden && typeof window.seekMergeAudio === 'function') {
-    e.preventDefault();
-    window.seekMergeAudio(seconds);
-    return;
-  }
-  
-    // 4. Check Audio Video
+
   const panelAudioVideo = document.getElementById('panel-audio-to-video');
-  if (panelAudioVideo && !panelAudioVideo.hidden && typeof window.seekAudioVideo === 'function') {
-    e.preventDefault();
-    window.seekAudioVideo(seconds);
-    return;
+  if (panelAudioVideo && !panelAudioVideo.hidden && typeof window.isAudioVideoPreviewing === 'function' && window.isAudioVideoPreviewing()) {
+    if (typeof window.seekAudioVideo === 'function' && window.seekAudioVideo(seconds)) {
+      e.preventDefault();
+      return;
+    }
   }
-  
-  // 5. Handle HTMLMediaElements (for Trim Video, Merge Video, Audio Video, and Library UI)
+
+  const panelTrimAudio = document.getElementById('panel-trim-audio');
+  if (panelTrimAudio && !panelTrimAudio.hidden && typeof window.isTrimAudioPreviewing === 'function' && window.isTrimAudioPreviewing()) {
+    if (typeof window.seekTrimAudio === 'function' && window.seekTrimAudio(seconds)) {
+      e.preventDefault();
+      return;
+    }
+  }
+
+  const panelMergeAudio = document.getElementById('panel-merge-audio');
+  if (panelMergeAudio && !panelMergeAudio.hidden && typeof window.isMergeAudioPreviewing === 'function' && window.isMergeAudioPreviewing()) {
+    if (typeof window.seekMergeAudio === 'function' && window.seekMergeAudio(seconds)) {
+      e.preventDefault();
+      return;
+    }
+  }
+
+  // 2. If nothing is actively playing, ONLY rewind if track ended naturally (seconds < 0 and lastEndedPreview is set)
+  // If user clicked Stop, window.lastEndedPreview is null, so arrow keys will NOT seek or restart!
+  if (seconds < 0 && window.lastEndedPreview) {
+    if (window.lastEndedPreview === 'library' && typeof window.seekLibrary === 'function') {
+      if (window.seekLibrary(seconds)) {
+        e.preventDefault();
+        return;
+      }
+    } else if (window.lastEndedPreview === 'trim-video' && typeof window.seekTrimVideo === 'function') {
+      if (window.seekTrimVideo(seconds)) {
+        e.preventDefault();
+        return;
+      }
+    } else if (window.lastEndedPreview === 'merge-video' && typeof window.seekMergeVideo === 'function') {
+      if (window.seekMergeVideo(seconds)) {
+        e.preventDefault();
+        return;
+      }
+    } else if (window.lastEndedPreview === 'video-audio' && typeof window.seekVideoAudio === 'function') {
+      if (window.seekVideoAudio(seconds)) {
+        e.preventDefault();
+        return;
+      }
+    } else if (window.lastEndedPreview === 'audio-video' && typeof window.seekAudioVideo === 'function') {
+      if (window.seekAudioVideo(seconds)) {
+        e.preventDefault();
+        return;
+      }
+    } else if (window.lastEndedPreview === 'trim-audio' && typeof window.seekTrimAudio === 'function') {
+      if (window.seekTrimAudio(seconds)) {
+        e.preventDefault();
+        return;
+      }
+    } else if (window.lastEndedPreview === 'merge-audio' && typeof window.seekMergeAudio === 'function') {
+      if (window.seekMergeAudio(seconds)) {
+        e.preventDefault();
+        return;
+      }
+    }
+  }
+
+  // 3. Fallback for any actively playing HTMLMediaElements (only when not paused)
   const medias = document.querySelectorAll('audio, video');
   let handled = false;
   medias.forEach(media =>{
-     if (!media.paused && media.duration) {
+     if (media.duration && !media.paused && !media.ended) {
         media.currentTime = Math.max(0, Math.min(media.duration, media.currentTime + seconds));
         handled = true;
      }
@@ -295,3 +413,4 @@ window.addEventListener('keydown', (e) =>{
     e.preventDefault();
   }
 });
+

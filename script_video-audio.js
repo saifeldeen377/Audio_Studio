@@ -48,8 +48,13 @@ function initVideoToAudio() {
   let vaPreviewOffset = 0;
   let vaPreviewBuffer = null;
   let vaPreviewAssetId = null;
+  let vaHasEnded = false;
 
-  function stopVaPreview() {
+  function stopVaPreview(resetEnded = true) {
+    if (resetEnded) {
+      vaHasEnded = false;
+      window.lastEndedPreview = null;
+    }
     if (!vaIsPreviewing && !vaPreviewAudioSrc) return;
     if (vaPreviewAudioSrc) {
       vaPreviewAudioSrc.onended = null;
@@ -92,6 +97,11 @@ function initVideoToAudio() {
         return;
       }
 
+      if (typeof window.stopAllStudioPreviews === 'function') {
+        window.stopAllStudioPreviews('video-audio');
+      }
+      vaHasEnded = false;
+
       const actx = getAudioCtx();
       if (actx.state === 'suspended') { await actx.resume(); }
 
@@ -127,9 +137,10 @@ function initVideoToAudio() {
 
       vaPreviewAudioSrc.onended = () =>{
         if (!vaIsPreviewing) return; // paused
-        stopVaPreview();
+        stopVaPreview(false);
+        window.lastEndedPreview = 'video-audio';
+        vaHasEnded = true;
         statusEl.textContent = '';
-
       };
     });
   }
@@ -149,9 +160,77 @@ function initVideoToAudio() {
 
   if (btnStop) {
     btnStop.addEventListener('click', () =>{
-      stopVaPreview();
+      stopVaPreview(true);
       statusEl.textContent = '';
       btnPreview.focus();
     });
   }
+
+  window.seekVideoAudio = function(seconds) {
+    if (!vaPreviewBuffer) return false;
+    const actx = getAudioCtx();
+
+    if (vaIsPreviewing) {
+      let currentPos = vaPreviewOffset + (actx.currentTime - vaPreviewStartTime);
+      let newPos = Math.max(0, Math.min(vaPreviewBuffer.duration, currentPos + seconds));
+      vaPreviewOffset = newPos;
+
+      if (vaPreviewAudioSrc) {
+        vaPreviewAudioSrc.onended = null;
+        try { vaPreviewAudioSrc.stop(); } catch (e) {}
+      }
+      vaPreviewAudioSrc = actx.createBufferSource();
+      vaPreviewAudioSrc.buffer = vaPreviewBuffer;
+      vaPreviewAudioSrc.connect(actx.destination);
+      vaPreviewAudioSrc.start(0, vaPreviewOffset);
+      vaPreviewStartTime = actx.currentTime;
+      vaPreviewAudioSrc.onended = () => {
+        if (!vaIsPreviewing) return;
+        stopVaPreview(false);
+        window.lastEndedPreview = 'video-audio';
+        vaHasEnded = true;
+        statusEl.textContent = '';
+      };
+      return true;
+    }
+
+    if (seconds < 0 && vaHasEnded) {
+      if (actx.state === 'suspended') { actx.resume(); }
+      vaPreviewOffset = Math.max(0, vaPreviewBuffer.duration - 5);
+      if (vaPreviewAudioSrc) {
+        vaPreviewAudioSrc.onended = null;
+        try { vaPreviewAudioSrc.stop(); } catch (e) {}
+      }
+      vaPreviewAudioSrc = actx.createBufferSource();
+      vaPreviewAudioSrc.buffer = vaPreviewBuffer;
+      vaPreviewAudioSrc.connect(actx.destination);
+      vaPreviewAudioSrc.start(0, vaPreviewOffset);
+      vaPreviewStartTime = actx.currentTime;
+      vaIsPreviewing = true;
+      vaHasEnded = false;
+      if (btnPreview) {
+        btnPreview.textContent = 'Pause Preview';
+        btnPreview.setAttribute('aria-label', `Pause preview`);
+      }
+      if (btnReplay) btnReplay.style.display = 'inline-block';
+      if (btnStop) btnStop.style.display = 'inline-block';
+      vaPreviewAudioSrc.onended = () => {
+        if (!vaIsPreviewing) return;
+        stopVaPreview(false);
+        window.lastEndedPreview = 'video-audio';
+        vaHasEnded = true;
+        statusEl.textContent = '';
+      };
+      return true;
+    }
+    return false;
+  };
+
+  window.isVideoAudioPreviewing = function() {
+    return vaIsPreviewing;
+  };
+
+  window.stopVideoAudioPreview = function() {
+    stopVaPreview(true);
+  };
 }

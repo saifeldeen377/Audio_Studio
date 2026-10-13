@@ -21,6 +21,10 @@ function initTrimVideo() {
   const statusEl = document.getElementById('tv-status');
 
   let tvIsPreviewing = false;
+  let tvLastAssetId = null;
+  let tvLastStart = 0;
+  let tvLastEnd = Infinity;
+  let tvHasEnded = false;
   
   function stopTvPreview() {
     container.innerHTML = '';
@@ -68,12 +72,22 @@ function initTrimVideo() {
 
     if (start >= end) { alert('Trim End must be after Trim Start.'); return; }
 
+    if (typeof window.stopAllStudioPreviews === 'function') {
+      window.stopAllStudioPreviews('trim-video');
+    }
+    tvHasEnded = false;
+
     container.hidden = false;
     container.innerHTML = `<video id="vid-tv-preview" src="${asset.objectURL}" autoplay controls playsinline></video>`;
     
     const vid = document.getElementById('vid-tv-preview');
     vid.currentTime = start;
     vid.play().catch(e =>console.error(e));
+
+    tvLastAssetId = assetId;
+    tvLastStart = start;
+    tvLastEnd = end;
+    tvHasEnded = false;
 
     tvIsPreviewing = true;
     btnPreview.textContent = 'Pause Trim';
@@ -85,6 +99,8 @@ function initTrimVideo() {
     vid.ontimeupdate = () =>{
       if (vid.currentTime >= end) {
         vid.pause();
+        tvHasEnded = true;
+        window.lastEndedPreview = 'trim-video';
         stopTvPreview();
         statusEl.textContent = '';
 
@@ -92,6 +108,8 @@ function initTrimVideo() {
     };
 
     vid.onended = () =>{
+      tvHasEnded = true;
+      window.lastEndedPreview = 'trim-video';
       stopTvPreview();
       statusEl.textContent = '';
 
@@ -110,10 +128,80 @@ function initTrimVideo() {
   });
 
   btnStop.addEventListener('click', () =>{
+    tvHasEnded = false;
+    window.lastEndedPreview = null;
     stopTvPreview();
     statusEl.textContent = '';
     btnPreview.focus();
   });
+
+  window.seekTrimVideo = function(seconds) {
+    const vid = document.getElementById('vid-tv-preview');
+    if (tvIsPreviewing && vid) {
+      if (seconds < 0) {
+        vid.currentTime = Math.max(tvLastStart, vid.currentTime - 5);
+      } else {
+        vid.currentTime = Math.min(tvLastEnd, vid.currentTime + 5);
+      }
+      return true;
+    }
+
+    if (seconds < 0 && tvHasEnded && tvLastAssetId) {
+      const asset = getAsset(tvLastAssetId);
+      if (!asset) return false;
+
+      container.hidden = false;
+      container.innerHTML = `<video id="vid-tv-preview" src="${asset.objectURL}" autoplay controls playsinline></video>`;
+      const newVid = document.getElementById('vid-tv-preview');
+      if (newVid) {
+        const startPlaybackAtLast5 = () => {
+          const effectiveEnd = (isFinite(tvLastEnd) && tvLastEnd > 0) ? tvLastEnd : (newVid.duration || 10);
+          const startAt = Math.max(tvLastStart, effectiveEnd - 5);
+          newVid.currentTime = startAt;
+          newVid.play().catch(e => console.error(e));
+        };
+
+        if (newVid.duration && !isNaN(newVid.duration)) {
+          startPlaybackAtLast5();
+        } else {
+          newVid.onloadedmetadata = startPlaybackAtLast5;
+        }
+
+        tvIsPreviewing = true;
+        tvHasEnded = false;
+        btnPreview.textContent = 'Pause Trim';
+        btnPreview.setAttribute('aria-label', `Pause trim preview`);
+        if (btnReplay) btnReplay.style.display = 'inline-block';
+        if (btnStop) btnStop.style.display = 'inline-block';
+
+        newVid.ontimeupdate = () => {
+          if (newVid.currentTime >= tvLastEnd) {
+            newVid.pause();
+            tvHasEnded = true;
+            window.lastEndedPreview = 'trim-video';
+            stopTvPreview();
+          }
+        };
+        newVid.onended = () => {
+          tvHasEnded = true;
+          window.lastEndedPreview = 'trim-video';
+          stopTvPreview();
+        };
+        return true;
+      }
+    }
+    return false;
+  };
+
+  window.isTrimVideoPreviewing = function() {
+    return tvIsPreviewing;
+  };
+
+  window.stopTrimVideoPreview = function() {
+    tvHasEnded = false;
+    window.lastEndedPreview = null;
+    stopTvPreview();
+  };
 
   const performTrimVideoExport = async (isSaveToLib) =>{
  if (isExportingMedia) { alert('An export is already in progress. Please wait.'); return; }

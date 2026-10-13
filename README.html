@@ -813,11 +813,13 @@ python -m http.server 3000
 <p>Accessibility is not a feature here — it's the foundation.</p>
 
 <h3>Smart Preview Controls </h3>
-<p>All tools and the media library use smart, accessible preview buttons:</p>
+<p>All tools and the media library use smart, accessible preview buttons and playback management:</p>
 <ul>
   <li><strong>Play/Pause/Resume</strong>: Toggles the preview. The button label naturally updates, allowing screen readers to announce the state automatically without annoying extra notifications.</li>
-  <li><strong>Stop</strong>: Hard stops the preview and resets to 0.0s. It is hidden by default, appears only when playing/paused, and disappears when stopped. If triggered by a screen reader or keyboard, focus is safely forced back to the Play button so you never lose your place.</li>
+  <li><strong>Stop</strong>: Hard stops the preview and resets to 0.0s. It is hidden by default, appears only when playing/paused, and disappears when stopped. If triggered by a screen reader or keyboard, focus is safely forced back to the Play button so you never lose your place. Pressing Stop also fully deactivates arrow key seeking to prevent accidental playback resumption.</li>
   <li><strong>Replay</strong>: Rewinds the preview to 0.0s and continues playing. Like the Stop button, it auto-hides when not needed and safely transfers focus back to Play if activated while visually hidden.</li>
+  <li><strong>Single-Stream Engine (Zero Audio Overlap)</strong>: Playing any preview in the library or any standard tool instantly and automatically stops whatever was previously playing. Switching tabs also halts background playback, ensuring only one clean audio or video stream plays at a time.</li>
+  <li><strong>Arrow Key Seeking &amp; Natural End Rewind</strong>: During any active preview, pressing Left Arrow (<code>&larr;</code>) or Right Arrow (<code>&rarr;</code>) seeks backward or forward by 5 seconds with zero screen reader speech interruption. If a track reaches its natural end, pressing Left Arrow (<code>&larr;</code>) automatically resumes and plays the final 5 seconds. Once explicit Stop is clicked, arrow navigation is deactivated.</li>
 </ul>
 
 <h3>Screen Reader Support </h3>
@@ -834,7 +836,8 @@ python -m http.server 3000
 <thead><tr><th>Key </th><th>Action </th></tr></thead>
 <tbody>
 <tr><td><kbd>Tab </kbd>/<kbd>Shift+Tab </kbd></td><td>Move between all interactive elements </td></tr>
-<tr><td><kbd>←</kbd><kbd>→</kbd></td><td>Navigate between tabs in the tab bar </td></tr>
+<tr><td><kbd>&larr;</kbd><kbd>&rarr;</kbd> (In Tab Bar)</td><td>Navigate between tabs in the tab bar </td></tr>
+<tr><td><kbd>&larr;</kbd><kbd>&rarr;</kbd> (During Preview)</td><td>Seek backward / forward 5s silently (or replay last 5s when track naturally finished) </td></tr>
 <tr><td><kbd>Enter </kbd>/<kbd>Space </kbd></td><td>Activate buttons and checkboxes </td></tr>
 <tr><td><kbd>M </kbd></td><td>Open Super Merger from anywhere </td></tr>
 <tr><td><kbd>T </kbd></td><td>Open Super Trim from anywhere </td></tr>

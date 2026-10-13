@@ -39,8 +39,14 @@ function initAudioToVideo() {
   let avPreviewAudioSrc = null;
   let avPreviewStartTime = 0;
   let avPreviewOffset = 0;
+  let avPreviewBuffer = null;
+  let avHasEnded = false;
 
-  function stopAvPreview() {
+  function stopAvPreview(resetEnded = true) {
+    if (resetEnded) {
+      avHasEnded = false;
+      window.lastEndedPreview = null;
+    }
     if (!avIsPreviewing && !avPreviewAudioSrc) return;
     if (avPreviewTimer) clearInterval(avPreviewTimer);
     if (avPreviewAudioSrc) {
@@ -88,6 +94,11 @@ function initAudioToVideo() {
         return;
       }
 
+      if (typeof window.stopAllStudioPreviews === 'function') {
+        window.stopAllStudioPreviews('audio-video');
+      }
+      avHasEnded = false;
+
       const totalDur = Math.max(...avSlides.map(s =>s.end));
       if (avPreviewOffset >= totalDur) avPreviewOffset = 0;
 
@@ -98,6 +109,7 @@ function initAudioToVideo() {
       btnPreview.textContent = 'Loading...';
       try {
         audioBuffer = await decodeAudio(getAsset(audioAssetId).objectURL);
+        avPreviewBuffer = audioBuffer;
       } catch (err) {
         statusEl.textContent = "Error decoding audio file.";
         btnPreview.textContent = 'Preview Video';
@@ -149,17 +161,19 @@ function initAudioToVideo() {
 
       avPreviewAudioSrc.onended = () =>{
         if (!avIsPreviewing) return; // paused
-        stopAvPreview();
+        stopAvPreview(false);
+        window.lastEndedPreview = 'audio-video';
+        avHasEnded = true;
         statusEl.textContent = '';
-
       };
 
       avPreviewTimer = setInterval(() =>{
         const elapsed = avPreviewOffset + (actx.currentTime - avPreviewStartTime);
         if (elapsed >= totalDur) {
-          stopAvPreview();
+          stopAvPreview(false);
+          window.lastEndedPreview = 'audio-video';
+          avHasEnded = true;
           statusEl.textContent = '';
-
           return;
         }
 
@@ -196,11 +210,62 @@ function initAudioToVideo() {
 
   if (btnStop) {
     btnStop.addEventListener('click', () =>{
-      stopAvPreview();
+      stopAvPreview(true);
       statusEl.textContent = '';
       btnPreview.focus();
     });
   }
+
+  window.seekAudioVideo = function(seconds) {
+    if (!avSlides.length) return false;
+    const totalDur = Math.max(...avSlides.map(s => s.end));
+    const actx = getAudioCtx();
+
+    if (avIsPreviewing) {
+      let currentPos = avPreviewOffset + (actx.currentTime - avPreviewStartTime);
+      let newPos = Math.max(0, Math.min(totalDur, currentPos + seconds));
+      avPreviewOffset = newPos;
+
+      if (avPreviewAudioSrc) {
+        avPreviewAudioSrc.onended = null;
+        try { avPreviewAudioSrc.stop(); } catch (e) {}
+      }
+      if (avPreviewBuffer) {
+        avPreviewAudioSrc = actx.createBufferSource();
+        avPreviewAudioSrc.buffer = avPreviewBuffer;
+        avPreviewAudioSrc.connect(actx.destination);
+        avPreviewAudioSrc.start(0, avPreviewOffset);
+        avPreviewStartTime = actx.currentTime;
+        avPreviewAudioSrc.onended = () => {
+          if (!avIsPreviewing) return;
+          stopAvPreview(false);
+          window.lastEndedPreview = 'audio-video';
+          avHasEnded = true;
+          statusEl.textContent = '';
+        };
+      }
+      return true;
+    }
+
+    if (seconds < 0 && avHasEnded) {
+      const audioAssetId = document.getElementById('av-audio-select')?.value;
+      if (!audioAssetId) return false;
+      avPreviewOffset = Math.max(0, totalDur - 5);
+      if (btnPreview) {
+        btnPreview.click();
+        return true;
+      }
+    }
+    return false;
+  };
+
+  window.isAudioVideoPreviewing = function() {
+    return avIsPreviewing;
+  };
+
+  window.stopAudioVideoPreview = function() {
+    stopAvPreview(true);
+  };
 }
 
 function renderAvTable() {
