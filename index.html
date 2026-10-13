@@ -435,6 +435,16 @@ window.onerror = function(msg, url, line, col, error) {
 
 <div id="sm-advanced-settings-panel" style="display: none; margin-top: 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px; background: var(--bg-card);">
 <div class="control-group">
+<label for="sm-export-range-behavior">Render &amp; Export Range (Output Cutoff):</label>
+<select id="sm-export-range-behavior" style="width: 100%; padding: 8px; border-radius: var(--radius-sm); background: var(--bg-main); border: 1px solid var(--border); color: var(--text);" aria-describedby="sm-export-range-hint">
+<option value="save_moment">Render up to stop / save moment only (Current timeline position)</option>
+<option value="full_all" selected>Render full mix to the end (Complete base audio &amp; all overlays)</option>
+<option value="base_end">Strictly up to base audio end (Cut off any trailing overlays)</option>
+<option value="last_overlay">Up to last active overlay end (Stop base audio there)</option>
+</select>
+<p id="sm-export-range-hint" class="field-hint" style="margin-top: 6px;">Controls where the exported WAV file ends. Choose whether to stop at the moment you clicked Save, render the entire file to the end, stop at the end of base audio, or end at the last overlay.</p>
+</div>
+<div class="control-group" style="margin-top: 15px;">
 <label for="sm-base-end-behavior">When Base Audio Ends:</label>
 <select id="sm-base-end-behavior" style="width: 100%; padding: 8px; border-radius: var(--radius-sm); background: var(--bg-main); border: 1px solid var(--border); color: var(--text);" aria-describedby="sm-base-end-hint">
 <option value="stop">Stop immediately when base ends</option>

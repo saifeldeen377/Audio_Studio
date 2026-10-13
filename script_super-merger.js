@@ -120,15 +120,20 @@ function initSuperMode() {
 
  const baseVolInput = document.getElementById('sm-base-volume');
  const baseVolVal = document.getElementById('sm-base-vol-val');
- baseVolInput.addEventListener('input', () =>{
- baseVolVal.textContent = baseVolInput.value;
- if (smBaseAsset) {
- smBaseAsset.volume = parseFloat(baseVolInput.value) / 100;
+ try { localStorage.removeItem('ams_sm_base_volume'); } catch(_) {}
+ if (baseVolInput && baseVolVal) {
+   baseVolInput.value = '100';
+   baseVolVal.textContent = '100';
+   baseVolInput.addEventListener('input', () =>{
+     baseVolVal.textContent = baseVolInput.value;
+     if (smBaseAsset) {
+       smBaseAsset.volume = parseFloat(baseVolInput.value) / 100;
+     }
+     if (smBaseAudio) {
+       smBaseAudio.volume = parseFloat(baseVolInput.value) / 100;
+     }
+   });
  }
- if (smBaseAudio) {
- smBaseAudio.volume = parseFloat(baseVolInput.value) / 100;
- }
- });
 
  const overlayVolInput = document.getElementById('sm-overlay-volume');
  const overlayVolVal = document.getElementById('sm-overlay-vol-val');
@@ -524,6 +529,59 @@ function initSuperMode() {
       if (advIndicator) {
         advIndicator.innerHTML = isExpanded ? '&#9662;' : '&#9652;';
       }
+    });
+  }
+
+  // --- Super Merger Settings Persistence in localStorage ---
+  const smSelectSettings = [
+    { id: 'sm-export-range-behavior', key: 'ams_sm_export_range_behavior', valid: ['save_moment', 'full_all', 'base_end', 'last_overlay'] },
+    { id: 'sm-base-end-behavior', key: 'ams_sm_base_end_behavior', valid: ['stop', 'stop_last_overlay', 'continue'] },
+    { id: 'sm-undo-behavior', key: 'ams_sm_undo_behavior', valid: ['seek', 'delete_only'] },
+    { id: 'sm-cancel-gap-behavior', key: 'ams_sm_cancel_gap_behavior', valid: ['empty_only', 'always'] },
+    { id: 'sm-effect-overlap-behavior', key: 'ams_sm_effect_overlap_behavior', valid: ['auto_stop', 'allow'] },
+    { id: 'sm-effect-clear-behavior', key: 'ams_sm_effect_clear_behavior', valid: ['unified', 'sequential'] }
+  ];
+
+  smSelectSettings.forEach(({ id, key, valid }) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    try {
+      const saved = localStorage.getItem(key);
+      if (saved && valid.includes(saved)) {
+        el.value = saved;
+      }
+    } catch (_) {}
+    el.addEventListener('change', () => {
+      try {
+        localStorage.setItem(key, el.value);
+      } catch (_) {}
+    });
+  });
+
+  // Checkbox: Headphone compensation
+  const smCompCheckbox = document.getElementById('sm-headphone-compensation');
+  if (smCompCheckbox) {
+    try {
+      const savedComp = localStorage.getItem('ams_sm_headphone_comp_enabled');
+      if (savedComp !== null) {
+        const isChecked = (savedComp === 'true');
+        smCompCheckbox.checked = isChecked;
+        const staComp = document.getElementById('sta-headphone-compensation');
+        if (staComp) staComp.checked = isChecked;
+        const sctComp = document.getElementById('sct-headphone-compensation');
+        if (sctComp) sctComp.checked = isChecked;
+        if (typeof updateAllLatencyDisplays === 'function') updateAllLatencyDisplays();
+      }
+    } catch (_) {}
+    smCompCheckbox.addEventListener('change', () => {
+      try {
+        localStorage.setItem('ams_sm_headphone_comp_enabled', String(smCompCheckbox.checked));
+      } catch (_) {}
+      const staComp = document.getElementById('sta-headphone-compensation');
+      if (staComp) staComp.checked = smCompCheckbox.checked;
+      const sctComp = document.getElementById('sct-headphone-compensation');
+      if (sctComp) sctComp.checked = smCompCheckbox.checked;
+      if (typeof updateAllLatencyDisplays === 'function') updateAllLatencyDisplays();
     });
   }
 
@@ -2746,21 +2804,28 @@ function updateSmTimeline() {
  updatePlaybackStateUI('soft-paused');
  } else {
  // Base is ended. Check behavior
- const endBehavior = document.getElementById('sm-base-end-behavior').value;
- const baseDur = smBaseAudio.duration || 0;
+ const endBehavior = document.getElementById('sm-base-end-behavior')?.value || 'stop_last_overlay';
  const hasActiveRecording = Object.keys(activeOverlayAudios).some(id =>{
      const a = activeOverlayAudios[id];
-     return a.state === 'playing'&& a.startTimeInBase !== null;
+     return a.state === 'playing';
  });
-          if (endBehavior === 'continue'|| smTotalRecordedDuration >baseDur + 0.05 || hasActiveRecording) {
-              smSoftPaused = true;
-              smSoftPauseStartVirtual = smVirtualTime;
-              smSoftPauseStartWall = now;
-              // updatePlaybackStateUI('soft-paused');
-          } else {
-              smRegularPauseBase();
-              return;
-          }
+ if (endBehavior === 'continue') {
+     smSoftPaused = true;
+     smSoftPauseStartVirtual = smVirtualTime;
+     smSoftPauseStartWall = now;
+ } else if (endBehavior === 'stop_last_overlay') {
+     if (hasActiveRecording) {
+         smSoftPaused = true;
+         smSoftPauseStartVirtual = smVirtualTime;
+         smSoftPauseStartWall = now;
+     } else {
+         smRegularPauseBase();
+         return;
+     }
+ } else {
+     smRegularPauseBase();
+     return;
+ }
  }
  }
 
@@ -2819,12 +2884,14 @@ function updateSmTimeline() {
  }
 
  if (smBaseAudio && smBaseAudio.endedTriggered && smSoftPaused && !smUserOverrideEndStop) {
-   const endBehavior = document.getElementById('sm-base-end-behavior').value;
+   const endBehavior = document.getElementById('sm-base-end-behavior')?.value || 'stop_last_overlay';
    if (endBehavior === 'stop_last_overlay') {
      const hasActiveRecording = Object.keys(activeOverlayAudios).some(id => activeOverlayAudios[id].state === 'playing');
      if (!hasActiveRecording) {
        smRegularPauseBase();
      }
+   } else if (endBehavior === 'stop') {
+     smRegularPauseBase();
    }
  }
  }
@@ -4636,33 +4703,187 @@ async function exportSuperModeWav(isSaveToLib = false) {
 
   cleanAndMergeBaseSegments();
 
-  // Calculate total duration correctly with crops and segments
-  const exportSegments = [...smBaseSegments];
+  const exportBehavior = document.getElementById('sm-export-range-behavior')?.value || 'full_all';
+
+  // 1. Gather recorded base segments
+  const rawBaseSegments = smBaseSegments.map(seg => ({ ...seg }));
   if (smBaseAudio && !smBaseAudio.paused && smBaseSegmentStartSource !== null) {
-  const activeDur = smBaseAudio.currentTime - smBaseSegmentStartSource;
-  if (activeDur >0) {
-  exportSegments.push({
-  timelineStart: smBaseSegmentStartTimeline,
-  sourceStart: smBaseSegmentStartSource,
-  duration: activeDur
-  });
-  }
+    const activeDur = smBaseAudio.currentTime - smBaseSegmentStartSource;
+    if (activeDur > 0) {
+      rawBaseSegments.push({
+        timelineStart: smBaseSegmentStartTimeline,
+        sourceStart: smBaseSegmentStartSource,
+        duration: activeDur
+      });
+    }
   }
 
-  let totalDuration = smTotalRecordedDuration || 0;
-  exportSegments.forEach(seg =>{
-  totalDuration = Math.max(totalDuration, seg.timelineStart + seg.duration);
+  // 2. Gather overlay clips with calculated durations and ends
+  const rawClips = [];
+  let maxOverlayEnd = 0;
+  smRecordedClips.forEach(c => {
+    const buf = overlayBuffers[c.assetId];
+    if (buf) {
+      const cs = c.cropStart || 0;
+      const ce = c.cropEnd != null ? Math.min(c.cropEnd, buf.duration) : buf.duration;
+      const dur = Math.max(0, ce - cs);
+      if (dur > 0.001) {
+        const clipEnd = c.timelineStart + dur;
+        maxOverlayEnd = Math.max(maxOverlayEnd, clipEnd);
+        rawClips.push({
+          ...c,
+          cropStart: cs,
+          duration: dur,
+          timelineEnd: clipEnd
+        });
+      }
+    }
   });
 
-  smRecordedClips.forEach(c =>{
-  const buf = overlayBuffers[c.assetId];
-  if (buf) {
-  const cs = c.cropStart || 0;
-  const ce = c.cropEnd != null ? Math.min(c.cropEnd, buf.duration) : buf.duration;
-  const dur = Math.max(0, ce - cs);
-  totalDuration = Math.max(totalDuration, c.timelineStart + dur);
+  // 3. Current timeline moment where save was clicked / stopped
+  let currentSaveMoment = 0;
+  if (smBaseAudio && !smBaseAudio.paused && smBaseSegmentStartSource !== null) {
+    currentSaveMoment = smBaseSegmentStartTimeline + (smBaseAudio.currentTime - smBaseSegmentStartSource);
+  } else if (smVirtualTime > 0) {
+    currentSaveMoment = smVirtualTime;
+  } else if (smTotalRecordedDuration > 0) {
+    currentSaveMoment = smTotalRecordedDuration;
+  } else {
+    rawBaseSegments.forEach(seg => {
+      currentSaveMoment = Math.max(currentSaveMoment, seg.timelineStart + seg.duration);
+    });
+    currentSaveMoment = Math.max(currentSaveMoment, maxOverlayEnd);
   }
+  if (currentSaveMoment <= 0) {
+    currentSaveMoment = (baseBuffer && baseBuffer.duration > 0) ? baseBuffer.duration : 0.1;
+  }
+
+  // 4. Construct full base segments (completing base audio to buffer duration if needed)
+  const fullBaseSegments = rawBaseSegments.map(seg => ({ ...seg }));
+  let maxSourceEnd = 0;
+  let maxTimelineEnd = 0;
+  fullBaseSegments.forEach(seg => {
+    maxSourceEnd = Math.max(maxSourceEnd, seg.sourceStart + seg.duration);
+    maxTimelineEnd = Math.max(maxTimelineEnd, seg.timelineStart + seg.duration);
   });
+  if (baseBuffer && maxSourceEnd < baseBuffer.duration - 0.005) {
+    const remDur = baseBuffer.duration - maxSourceEnd;
+    fullBaseSegments.push({
+      timelineStart: maxTimelineEnd,
+      sourceStart: maxSourceEnd,
+      duration: remDur
+    });
+    maxTimelineEnd += remDur;
+  }
+  const fullBaseEnd = maxTimelineEnd > 0 ? maxTimelineEnd : (baseBuffer ? baseBuffer.duration : currentSaveMoment);
+
+  // 5. Determine final segments, final clips, and totalDuration based on exportBehavior
+  const finalBaseSegments = [];
+  const finalClips = [];
+  let totalDuration = 0;
+
+  if (exportBehavior === 'save_moment') {
+    const cutoff = currentSaveMoment;
+    totalDuration = cutoff;
+
+    rawBaseSegments.forEach(seg => {
+      if (seg.timelineStart < cutoff) {
+        const clampedDur = Math.min(seg.duration, cutoff - seg.timelineStart);
+        if (clampedDur > 0.001) {
+          finalBaseSegments.push({
+            timelineStart: seg.timelineStart,
+            sourceStart: seg.sourceStart,
+            duration: clampedDur
+          });
+        }
+      }
+    });
+
+    rawClips.forEach(c => {
+      if (c.timelineStart < cutoff) {
+        const clampedDur = Math.min(c.duration, cutoff - c.timelineStart);
+        if (clampedDur > 0.001) {
+          finalClips.push({
+            ...c,
+            duration: clampedDur
+          });
+        }
+      }
+    });
+  } else if (exportBehavior === 'base_end') {
+    const cutoff = fullBaseEnd;
+    totalDuration = cutoff;
+
+    fullBaseSegments.forEach(seg => {
+      if (seg.timelineStart < cutoff) {
+        const clampedDur = Math.min(seg.duration, cutoff - seg.timelineStart);
+        if (clampedDur > 0.001) {
+          finalBaseSegments.push({
+            timelineStart: seg.timelineStart,
+            sourceStart: seg.sourceStart,
+            duration: clampedDur
+          });
+        }
+      }
+    });
+
+    rawClips.forEach(c => {
+      if (c.timelineStart < cutoff) {
+        const clampedDur = Math.min(c.duration, cutoff - c.timelineStart);
+        if (clampedDur > 0.001) {
+          finalClips.push({
+            ...c,
+            duration: clampedDur
+          });
+        }
+      }
+    });
+  } else if (exportBehavior === 'last_overlay') {
+    if (maxOverlayEnd > 0) {
+      const cutoff = maxOverlayEnd;
+      totalDuration = cutoff;
+
+      fullBaseSegments.forEach(seg => {
+        if (seg.timelineStart < cutoff) {
+          const clampedDur = Math.min(seg.duration, cutoff - seg.timelineStart);
+          if (clampedDur > 0.001) {
+            finalBaseSegments.push({
+              timelineStart: seg.timelineStart,
+              sourceStart: seg.sourceStart,
+              duration: clampedDur
+            });
+          }
+        }
+      });
+
+      finalClips.push(...rawClips);
+    } else {
+      totalDuration = currentSaveMoment;
+      rawBaseSegments.forEach(seg => {
+        if (seg.timelineStart < currentSaveMoment) {
+          const clampedDur = Math.min(seg.duration, currentSaveMoment - seg.timelineStart);
+          if (clampedDur > 0.001) {
+            finalBaseSegments.push({
+              timelineStart: seg.timelineStart,
+              sourceStart: seg.sourceStart,
+              duration: clampedDur
+            });
+          }
+        }
+      });
+    }
+  } else {
+    // Default 'full_all'
+    totalDuration = Math.max(fullBaseEnd, maxOverlayEnd);
+    if (smTotalRecordedDuration) {
+      totalDuration = Math.max(totalDuration, smTotalRecordedDuration);
+    }
+
+    finalBaseSegments.push(...fullBaseSegments);
+    finalClips.push(...rawClips);
+  }
+
+  totalDuration = Math.max(0.1, Number(totalDuration) || 0.1);
 
   const sr = getAudioCtx().sampleRate;
   const offline = new OfflineAudioContext(2, Math.ceil(totalDuration * sr), sr);
@@ -4729,8 +4950,9 @@ async function exportSuperModeWav(isSaveToLib = false) {
   // Gather effect boundary events
   const effectEvents = [];
   smRecordedEffects.forEach(e => {
+   if (e.timelineStart >= totalDuration) return;
    effectEvents.push({ time: e.timelineStart, type: 'start', effect: e });
-   if (e.timelineEnd !== null) {
+   if (e.timelineEnd !== null && e.timelineEnd < totalDuration) {
     effectEvents.push({ time: e.timelineEnd, type: 'end', effect: e });
    } else {
     effectEvents.push({ time: totalDuration, type: 'end', effect: e });
@@ -4812,32 +5034,29 @@ async function exportSuperModeWav(isSaveToLib = false) {
 
   const baseVolume = (smBaseAsset && smBaseAsset.volume !== undefined) ? smBaseAsset.volume : 1.0;
 
-  exportSegments.forEach(seg =>{
-  const baseSrc = offline.createBufferSource();
-  baseSrc.buffer = baseBuffer;
-  const baseGain = offline.createGain();
-  baseGain.gain.value = baseVolume;
-  baseSrc.connect(baseGain);
-  baseGain.connect(offlineBaseBus); // Route to base bus
-  baseSrc.start(seg.timelineStart, seg.sourceStart, seg.duration);
+  finalBaseSegments.forEach(seg => {
+   if (seg.duration <= 0.001) return;
+   const baseSrc = offline.createBufferSource();
+   baseSrc.buffer = baseBuffer;
+   const baseGain = offline.createGain();
+   baseGain.gain.value = baseVolume;
+   baseSrc.connect(baseGain);
+   baseGain.connect(offlineBaseBus); // Route to base bus
+   baseSrc.start(seg.timelineStart, seg.sourceStart, seg.duration);
   });
 
-  smRecordedClips.forEach(c =>{
-  const buf = overlayBuffers[c.assetId];
-  if (buf) {
-  const src = offline.createBufferSource();
-  src.buffer = buf;
-  const gain = offline.createGain();
-  gain.gain.value = (c.volume !== undefined) ? c.volume : 1.0;
-  src.connect(gain);
-  gain.connect(offlineOverlayBus); // Route to overlay bus
+  finalClips.forEach(c => {
+   const buf = overlayBuffers[c.assetId];
+   if (buf && c.duration > 0.001) {
+    const src = offline.createBufferSource();
+    src.buffer = buf;
+    const gain = offline.createGain();
+    gain.gain.value = (c.volume !== undefined) ? c.volume : 1.0;
+    src.connect(gain);
+    gain.connect(offlineOverlayBus); // Route to overlay bus
 
-  const cs = c.cropStart || 0;
-  const ce = c.cropEnd != null ? Math.min(c.cropEnd, buf.duration) : buf.duration;
-  const dur = Math.max(0, ce - cs);
-
-  src.start(c.timelineStart, cs, dur);
-  }
+    src.start(c.timelineStart, c.cropStart, c.duration);
+   }
   });
 
   try {

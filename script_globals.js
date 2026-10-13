@@ -80,6 +80,7 @@ window.resetHeadphoneLatency = function() {
   amsHeadphoneLatencySec = 0;
   if (typeof smHeadphoneLatencySec !== 'undefined') smHeadphoneLatencySec = 0;
   try { localStorage.setItem('ams_headphone_latency_sec', '0'); } catch(_) {}
+  try { localStorage.setItem('ams_sm_headphone_comp_enabled', 'false'); } catch(_) {}
   const smComp = document.getElementById('sm-headphone-compensation');
   if (smComp) smComp.checked = false;
   const staComp = document.getElementById('sta-headphone-compensation');
@@ -93,6 +94,14 @@ window.resetHeadphoneLatency = function() {
 // Global listener for toggling compensation checkboxes across tools (silent, letting standard checkbox announce state)
 document.addEventListener('change', (e) => {
   if (e.target && (e.target.id === 'sm-headphone-compensation' || e.target.id === 'sta-headphone-compensation' || e.target.id === 'sct-headphone-compensation')) {
+    const isChecked = e.target.checked;
+    const smComp = document.getElementById('sm-headphone-compensation');
+    if (smComp) smComp.checked = isChecked;
+    const staComp = document.getElementById('sta-headphone-compensation');
+    if (staComp) staComp.checked = isChecked;
+    const sctComp = document.getElementById('sct-headphone-compensation');
+    if (sctComp) sctComp.checked = isChecked;
+    try { localStorage.setItem('ams_sm_headphone_comp_enabled', String(isChecked)); } catch(_) {}
     updateAllLatencyDisplays();
   }
 });

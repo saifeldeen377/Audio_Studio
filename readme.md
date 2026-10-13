@@ -130,7 +130,7 @@ Traditional editors require you to carefully place audio clips on a visual timel
 ### Quick Start
 1. Press `M` anywhere on the page - or click **" Super Merger"** in the header. Focus jumps directly to the dialog.
 2. **Step 1:** Select your base audio (the backbone of your mix). Adjust its **Base Audio Volume** (0-100%) to ensure it sits well in the mix.
-   - **Additional Settings & Behaviors:** Click the collapsible **"Additional Settings & Behaviors"** button to configure advanced settings like **Base Audio End Behavior**, **Undo Behavior**, **Multiple Effects of Same Type**, and **Overwritten & Connected Effects Stop / Deletion** (detailed below). Grouped behind an accessible disclosure button, this keeps the setup clean and uncluttered.
+   - **Additional Settings & Behaviors:** Click the collapsible **"Additional Settings & Behaviors"** button to configure advanced settings like **Render & Export Range (Output Cutoff)**, **Base Audio End Behavior**, **Undo Behavior**, **Multiple Effects of Same Type**, and **Overwritten & Connected Effects Stop / Deletion** (detailed below). Grouped behind an accessible disclosure button, this keeps the setup clean and uncluttered.
    - **Headphone Latency Compensation & Calibration:** If you are using wireless or Bluetooth headphones with noticeable delay, click **"Calibrate Delay"** (located conveniently next to the additional settings button) and follow the audio prompts. You can also toggle the **"Apply headphone delay compensation"** checkbox on or off at any time. When disabled, the compensation value becomes 0 ms. When enabled, the studio automatically deducts your calibrated delay from both your future **overlay** and **audio effect (FX)** recordings so your final exported mix is perfectly on beat. *(Note: The calibrated delay value is unified and saved globally across Super Merger, Super Trim, and Super Cut — calibrating once in any tool automatically updates the others).*
 3. **Step 2:** Add your live triggers (Overlays and Effects):
    - **For Overlays (Audio clips):** Leave type as "Audio File Overlay". Select an audio file from your library, type a shortcut key (e.g., `d`), adjust **Volume**, choose **Trigger Behavior**, and click **" Add to Super Mix"**.
@@ -182,6 +182,13 @@ You can assign real-time effects to keys and apply them live (or offline via exp
 - **Calibrated Makeup Gain & Volume Balance**: Filter-heavy effects (Phone, Radio, Walkie-Talkie, Lowpass) incorporate calibrated makeup gain to prevent signal drops caused by frequency cuts, while intelligent single-pass routing guarantees compensation never stacks or doubles unexpectedly across re-recorded intervals.
 
 ### Additional Settings & Behaviors
+
+#### Render & Export Range (Output Cutoff)
+Located at the beginning of the additional settings panel, this controls where your exported WAV file ends:
+- **Render full mix to the end (Default):** Renders the complete project until everything finishes. Both the full base audio file (even if you stopped listening early) and all recorded overlay sounds are rendered to their natural ends.
+- **Render up to stop / save moment only:** Cuts off the export at the exact timeline timestamp where you clicked Save or stopped recording. Useful for live tape-style recordings where you only want what was actively captured.
+- **Strictly up to base audio end:** Completes the entire base audio track and stops immediately when the base finishes, trimming off any trailing overlay tails that extend past the base.
+- **Up to last active overlay end:** Renders until the end of the last recorded overlay sound and stops there, without continuing unneeded base audio. This completely eliminates the "dead air" problem when using long background music tracks with short dialogue or effects.
 
 #### Base Audio End Behavior
 Under the Base Audio File selection, you can configure what happens when the base audio ends physically:

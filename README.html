@@ -523,7 +523,7 @@ python -m http.server 3000
 <li>Press <kbd>M </kbd>anywhere on the page - or click <strong>"Super Merger"</strong>in the header. Focus jumps directly to the dialog.</li>
 <li><strong>Step 1:</strong>Select your base audio (the backbone of your mix). Adjust its <strong>Base Audio Volume </strong>(0-100%) to ensure it sits well in the mix.
     <ul>
-        <li><strong>Additional Settings &amp; Behaviors:</strong> Click the collapsible <strong>"Additional Settings &amp; Behaviors"</strong> button to configure advanced settings like <strong>Base Audio End Behavior</strong>, <strong>Undo Behavior</strong>, <strong>Multiple Effects of Same Type</strong>, and <strong>Overwritten &amp; Connected Effects Stop / Deletion</strong> (detailed below). Grouped behind an accessible disclosure button, this keeps the setup clean and uncluttered.</li>
+        <li><strong>Additional Settings &amp; Behaviors:</strong> Click the collapsible <strong>"Additional Settings &amp; Behaviors"</strong> button to configure advanced settings like <strong>Render &amp; Export Range (Output Cutoff)</strong>, <strong>Base Audio End Behavior</strong>, <strong>Undo Behavior</strong>, <strong>Multiple Effects of Same Type</strong>, and <strong>Overwritten &amp; Connected Effects Stop / Deletion</strong> (detailed below). Grouped behind an accessible disclosure button, this keeps the setup clean and uncluttered.</li>
         <li><strong>Headphone Latency Compensation &amp; Calibration:</strong> If you are using wireless or Bluetooth headphones with noticeable delay, click <strong>"Calibrate Delay"</strong> (located conveniently next to the additional settings button) and follow the audio prompts. You can also toggle the <strong>"Apply headphone delay compensation"</strong> checkbox on or off at any time. When disabled, the compensation value becomes 0 ms. When enabled, the studio automatically deducts your calibrated delay from both your future <strong>overlay</strong> and <strong>audio effect (FX)</strong> recordings so your final exported mix is perfectly on beat. <em>(Note: The calibrated delay value is unified and saved globally across Super Merger, Super Trim, and Super Cut — calibrating once in any tool automatically updates the others).</em></li>
     </ul>
 </li>
@@ -597,6 +597,15 @@ python -m http.server 3000
 </ul>
 
 <h3 id="sm-advanced">Additional Settings &amp; Behaviors</h3>
+
+<h4 id="sm-export-range">Render &amp; Export Range (Output Cutoff)</h4>
+<p>Located at the beginning of the additional settings panel, this controls where your exported WAV file ends:</p>
+<ul>
+<li><strong>Render full mix to the end (Default):</strong> Renders the complete project until everything finishes. Both the complete base audio file (even if you stopped listening early) and all recorded overlay sounds are rendered to their natural ends.</li>
+<li><strong>Render up to stop / save moment only:</strong> Cuts off the export at the exact timeline timestamp where you clicked Save or stopped recording. Useful for live tape-style recordings where you only want what was actively captured.</li>
+<li><strong>Strictly up to base audio end:</strong> Completes the entire base audio track and stops immediately when the base finishes, trimming off any trailing overlay tails that extend past the base.</li>
+<li><strong>Up to last active overlay end:</strong> Renders until the end of the last recorded overlay sound and stops there, without continuing unneeded base audio. This completely eliminates the "dead air" problem when using long background music tracks with short dialogue or effects.</li>
+</ul>
 
 <h4 id="sm-settings">Base Audio End Behavior </h4>
 <p>Under the Base Audio File selection, you can configure what happens when the base audio ends physically:</p>
