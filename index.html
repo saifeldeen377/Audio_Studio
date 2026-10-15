@@ -37,8 +37,8 @@ window.onerror = function(msg, url, line, col, error) {
 <div class="header-actions">
 <a href="README.html" class="btn btn-secondary" target="_blank" style="margin-right: 10px; text-decoration: none;" aria-label="Read Documentation">Readme </a>
 <button id="btn-enter-super-mode" class="btn btn-primary" aria-label="Enter Super Merger, shortcut key m">Super Merger </button>
-<button id="btn-enter-super-trim" class="btn btn-primary" aria-label="Enter Super Trim, shortcut key t" style="margin-left: 10px;">Super Trim </button>
 <button id="btn-enter-super-cut" class="btn btn-primary" aria-label="Enter Super Cut, shortcut key c" style="margin-left: 10px;">Super Cut </button>
+<button id="btn-enter-super-trim" class="btn btn-primary" aria-label="Enter Super Trim, shortcut key t" style="margin-left: 10px;">Super Trim </button>
 </div>
 </div>
 </header>
@@ -65,6 +65,20 @@ window.onerror = function(msg, url, line, col, error) {
 <input type="file" id="lib-file-input" accept="audio/*,video/*,image/*">
 </div>
 <button id="btn-add-to-library" class="btn btn-secondary">Add to Library </button>
+</div>
+
+<!-- More Library Options Bar (Menu Button) -->
+<div class="library-actions-bar" id="lib-actions-bar">
+  <div class="menu-button-container">
+    <button type="button" id="btn-lib-more-options" class="btn btn-secondary" aria-haspopup="menu" aria-expanded="false" aria-controls="lib-more-menu">
+      More library options
+    </button>
+    <div id="lib-more-menu" role="menu" class="accessible-dropdown-menu" aria-labelledby="btn-lib-more-options" hidden>
+      <button type="button" role="menuitem" id="menu-item-reset" class="dropdown-menu-item">Reset library...</button>
+      <button type="button" role="menuitem" id="menu-item-batch-delete" class="dropdown-menu-item">Delete files by selection...</button>
+      <button type="button" role="menuitem" id="menu-item-restore-defaults" class="dropdown-menu-item" style="display: none;">Restore default files</button>
+    </div>
+  </div>
 </div>
 
 <div class="library-items" id="library-items" role="list" aria-label="Uploaded media assets">
@@ -418,6 +432,7 @@ window.onerror = function(msg, url, line, col, error) {
 <label for="sm-base-select">Select Base Audio from Library:</label>
 <select id="sm-base-select">
 <option value=""disabled selected>Select from library...</option>
+<option value="no_base">no base, record overlays only</option>
 </select>
 </div>
 <div class="control-group">
@@ -682,6 +697,135 @@ window.onerror = function(msg, url, line, col, error) {
 </dialog>
 
 <!-- ══════════════════════════════════════════ -->
+<!-- SUPER CUT OVERLAY -->
+<!-- ══════════════════════════════════════════ -->
+<div id="super-cut-overlay" class="sm-overlay" hidden>
+<div class="sm-container" role="application" tabindex="-1" aria-label="Super Cut Audio">
+<header class="sm-header">
+<h2 id="sct-title">Super Cut Audio </h2>
+<div style="display: flex; gap: 8px; align-items: center;">
+<button id="btn-close-super-cut" class="btn btn-danger btn-sm" aria-label="Exit Super Cut">Close </button>
+</div>
+</header>
+
+<div class="sm-view" tabindex="-1">
+<p class="sm-description">
+ Live-cut an audio file by cutting out mistakes. Play the audio and press <kbd>s</kbd> (or <kbd>[</kbd>) to set the Start of a cut, and <kbd>e</kbd> (or <kbd>]</kbd>) to set the End. You can define multiple cuts to remove all mistakes at once. Shortcuts: <kbd>Ctrl+Left/Right</kbd> to delete previous/next cut, <kbd>Shift+Left/Right</kbd> to delete previous/next cut end, and <kbd>Alt+Left/Right</kbd> to delete previous/next cut start. Press <kbd>Space</kbd> anywhere to play or pause directly.
+</p>
+
+<div class="simple-form">
+<div class="control-group">
+<label for="sct-audio-select">Select Audio File from Library:</label>
+<select id="sct-audio-select">
+<option value="" disabled selected>Select from library...</option>
+</select>
+</div>
+
+<!-- Live Cut Interface -->
+<div class="super-trim-ui" style="margin: 20px 0; padding: 20px; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px solid var(--border);">
+            <div style="display: flex; gap: 15px; margin-bottom: 20px; align-items: center; justify-content: center;">
+              <button id="btn-sct-play" class="btn btn-success" style="font-size: 1.2rem;">Play (Space)</button>
+              <button id="btn-sct-stop" class="btn btn-danger" style="font-size: 1.2rem;" disabled>Stop </button>
+            </div>
+
+<div style="text-align: center; margin-bottom: 20px;">
+<div id="sct-time-display" style="font-size: 2.5rem; font-weight: bold; font-family: monospace; color: var(--accent);">00:00.0</div>
+<p style="color: var(--text-sub); margin-top: 5px;" aria-live="polite" id="sct-sr-announcer">Ready to play.</p>
+</div>
+
+<div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 20px;">
+<div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 6px; text-align: center;">
+<h3 style="margin: 0 0 10px 0;">Cut Start (Delete from)</h3>
+<div id="sct-start-display" style="font-size: 1.5rem; font-family: monospace; color: var(--text);">Not set</div>
+<p style="margin: 10px 0 0 0; color: var(--text-sub);">Press <kbd>s</kbd>(or <kbd>[</kbd>) while playing </p>
+</div>
+<div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 6px; text-align: center;">
+<h3 style="margin: 0 0 10px 0;">Cut End (Delete up to)</h3>
+<div id="sct-end-display" style="font-size: 1.5rem; font-family: monospace; color: var(--text);">Not set</div>
+<p style="margin: 10px 0 0 0; color: var(--text-sub);">Press <kbd>e</kbd>(or <kbd>]</kbd>) while playing </p>
+</div>
+</div>
+
+<div class="control-group" style="margin-top: 15px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px;">
+  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+    <input type="checkbox" id="sct-headphone-compensation" checked>
+    <span>Apply headphone delay compensation (<strong id="sct-latency-val">0 ms</strong>)</span>
+  </label>
+  <button type="button" id="btn-sct-calibrate-headphones" class="btn btn-secondary btn-sm">Calibrate Delay</button>
+</div>
+<p id="sct-latency-display" class="field-hint">Current headphone delay correction: 0 ms</p>
+
+<div class="control-group" style="margin-top: 15px; padding: 12px; background: rgba(0,0,0,0.15); border-radius: 8px; border: 1px solid var(--border);">
+  <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 8px;">
+    <label for="sct-delete-seek-mode" style="font-weight: 600;">Deletion Shortcuts Action:</label>
+    <select id="sct-delete-seek-mode" style="padding: 6px 10px; border-radius: var(--radius-sm); background: var(--bg-main); border: 1px solid var(--border); color: var(--text);">
+      <option value="none">Delete only (Stay at current position)</option>
+      <option value="jump" selected>Delete &amp; Jump to deleted position</option>
+      <option value="custom">Custom (Configure each shortcut)</option>
+    </select>
+  </div>
+  
+  <div id="sct-custom-seek-controls" style="display: none; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border);">
+    <div class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+      <div class="control-group">
+        <label for="sct-seek-full-cut">Full Cut (Ctrl+Arrows):</label>
+        <select id="sct-seek-full-cut" style="width: 100%; padding: 6px; border-radius: var(--radius-sm); background: var(--bg-main); border: 1px solid var(--border); color: var(--text);">
+          <option value="start" selected>Delete &amp; Jump to start</option>
+          <option value="none">Delete only</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label for="sct-seek-cut-end">Cut End (Shift+Arrows):</label>
+        <select id="sct-seek-cut-end" style="width: 100%; padding: 6px; border-radius: var(--radius-sm); background: var(--bg-main); border: 1px solid var(--border); color: var(--text);">
+          <option value="end" selected>Delete &amp; Jump to end</option>
+          <option value="start">Delete &amp; Jump to start</option>
+          <option value="none">Delete only</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label for="sct-seek-cut-start">Cut Start (Alt+Arrows):</label>
+        <select id="sct-seek-cut-start" style="width: 100%; padding: 6px; border-radius: var(--radius-sm); background: var(--bg-main); border: 1px solid var(--border); color: var(--text);">
+          <option value="start" selected>Delete &amp; Jump to start</option>
+          <option value="end">Delete &amp; Jump to end</option>
+          <option value="none">Delete only</option>
+        </select>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="clips-table-wrapper" style="margin-top: 20px; display: flex; justify-content: space-between; align-items: center;">
+<h3>Defined Cuts: <span id="sct-cuts-count">0</span></h3>
+<button id="btn-sct-manage-cuts" class="btn btn-secondary btn-sm" aria-label="Manage defined cuts">Manage Cuts </button>
+</div>
+
+<div class="panel-actions" style="margin-top: 20px;">
+<button id="btn-sct-preview" class="btn btn-secondary">Preview Remaining Audio </button>
+<button id="btn-sct-replay-preview" class="btn btn-secondary" style="display: none;" aria-label="Replay Preview">Replay Preview </button>
+<button id="btn-sct-stop-preview" class="btn btn-danger" style="display: none;">Stop Preview </button>
+<button id="btn-sct-export" class="btn btn-primary">Download Remaining WAV </button>
+<button id="btn-sct-save" class="btn btn-secondary">Save to Library </button>
+</div>
+<p id="sct-status" class="status-text" aria-live="polite"></p>
+</div>
+</div>
+</div>
+
+<dialog id="sct-manage-dialog" role="application" aria-label="Manage Defined Cuts" style="padding: 20px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-main); color: var(--text); max-width: 600px; width: 100%; box-shadow: 0 4px 15px rgba(0,0,0,0.5);">
+  <div class="dialog-content">
+    <h3 id="sct-manage-title" style="margin-top: 0;">Manage Defined Cuts</h3>
+    <div id="sct-manage-cuts-list" style="display: flex; flex-direction: column; gap: 15px; max-height: 60vh; overflow-y: auto; padding-right: 10px;">
+      <p id="sct-cuts-empty" class="empty-cell" style="text-align: center; color: var(--text-muted);">No cuts defined yet.</p>
+    </div>
+    <div style="margin-top: 15px; display: flex; justify-content: flex-end; gap: 10px;">
+      <button id="btn-sct-manage-close" class="btn btn-secondary btn-sm" aria-label="Close dialog">Close</button>
+      <button id="btn-sct-delete-all" class="btn btn-danger btn-sm" style="display: none;">Delete All</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- ══════════════════════════════════════════ -->
 <!-- SUPER TRIM OVERLAY -->
 <!-- ══════════════════════════════════════════ -->
 <div id="super-trim-overlay" class="sm-overlay" hidden>
@@ -754,95 +898,63 @@ window.onerror = function(msg, url, line, col, error) {
 </div>
 </div>
 
-<!-- ══════════════════════════════════════════ -->
-<!-- SUPER CUT OVERLAY -->
-<!-- ══════════════════════════════════════════ -->
-<div id="super-cut-overlay" class="sm-overlay" hidden>
-<div class="sm-container" role="application" tabindex="-1" aria-label="Super Cut Audio">
-<header class="sm-header">
-<h2 id="sct-title">Super Cut Audio </h2>
-<div style="display: flex; gap: 8px; align-items: center;">
-<button id="btn-close-super-cut" class="btn btn-danger btn-sm" aria-label="Exit Super Cut">Close </button>
-</div>
-</header>
-
-<div class="sm-view" tabindex="-1">
-<p class="sm-description">
- Live-cut an audio file by cutting out mistakes. Play the audio and press <kbd>s</kbd>(or <kbd>[</kbd>) to set the Start of a cut, and <kbd>e</kbd>(or <kbd>]</kbd>) to set the End. You can define multiple cuts to remove all mistakes at once.
-</p>
-
-<div class="simple-form">
-<div class="control-group">
-<label for="sct-audio-select">Select Audio File from Library:</label>
-<select id="sct-audio-select">
-<option value="" disabled selected>Select from library...</option>
-</select>
-</div>
-
-<!-- Live Cut Interface -->
-<div class="super-trim-ui" style="margin: 20px 0; padding: 20px; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px solid var(--border);">
-            <div style="display: flex; gap: 15px; margin-bottom: 20px; align-items: center; justify-content: center;">
-              <button id="btn-sct-play" class="btn btn-success" style="font-size: 1.2rem;">Play (Space)</button>
-              <button id="btn-sct-stop" class="btn btn-danger" style="font-size: 1.2rem;" disabled>Stop </button>
-            </div>
-
-<div style="text-align: center; margin-bottom: 20px;">
-<div id="sct-time-display" style="font-size: 2.5rem; font-weight: bold; font-family: monospace; color: var(--accent);">00:00.0</div>
-<p style="color: var(--text-sub); margin-top: 5px;" aria-live="polite" id="sct-sr-announcer">Ready to play.</p>
-</div>
-
-<div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 20px;">
-<div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 6px; text-align: center;">
-<h3 style="margin: 0 0 10px 0;">Cut Start (Delete from)</h3>
-<div id="sct-start-display" style="font-size: 1.5rem; font-family: monospace; color: var(--text);">Not set</div>
-<p style="margin: 10px 0 0 0; color: var(--text-sub);">Press <kbd>s</kbd>(or <kbd>[</kbd>) while playing </p>
-</div>
-<div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 6px; text-align: center;">
-<h3 style="margin: 0 0 10px 0;">Cut End (Delete up to)</h3>
-<div id="sct-end-display" style="font-size: 1.5rem; font-family: monospace; color: var(--text);">Not set</div>
-<p style="margin: 10px 0 0 0; color: var(--text-sub);">Press <kbd>e</kbd>(or <kbd>]</kbd>) while playing </p>
-</div>
-</div>
-
-<div class="control-group" style="margin-top: 15px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px;">
-  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-    <input type="checkbox" id="sct-headphone-compensation" checked>
-    <span>Apply headphone delay compensation (<strong id="sct-latency-val">0 ms</strong>)</span>
-  </label>
-  <button type="button" id="btn-sct-calibrate-headphones" class="btn btn-secondary btn-sm">Calibrate Delay</button>
-</div>
-<p id="sct-latency-display" class="field-hint">Current headphone delay correction: 0 ms</p>
-</div>
-
-<div class="clips-table-wrapper" style="margin-top: 20px; display: flex; justify-content: space-between; align-items: center;">
-<h3>Defined Cuts: <span id="sct-cuts-count">0</span></h3>
-<button id="btn-sct-manage-cuts" class="btn btn-secondary btn-sm" aria-label="Manage defined cuts">Manage Cuts </button>
-</div>
-
-<div class="panel-actions" style="margin-top: 20px;">
-<button id="btn-sct-preview" class="btn btn-secondary">Preview Remaining Audio </button>
-<button id="btn-sct-replay-preview" class="btn btn-secondary" style="display: none;" aria-label="Replay Preview">Replay Preview </button>
-<button id="btn-sct-stop-preview" class="btn btn-danger" style="display: none;">Stop Preview </button>
-<button id="btn-sct-export" class="btn btn-primary">Download Remaining WAV </button>
-<button id="btn-sct-save" class="btn btn-secondary">Save to Library </button>
-</div>
-<p id="sct-status" class="status-text" aria-live="polite"></p>
-</div>
-</div>
-</div>
-
-<dialog id="sct-manage-dialog" role="application" aria-label="Manage Defined Cuts" style="padding: 20px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-main); color: var(--text); max-width: 600px; width: 100%; box-shadow: 0 4px 15px rgba(0,0,0,0.5);">
-  <div class="dialog-content">
-    <h3 id="sct-manage-title" style="margin-top: 0;">Manage Defined Cuts</h3>
-    <div id="sct-manage-cuts-list" style="display: flex; flex-direction: column; gap: 15px; max-height: 60vh; overflow-y: auto; padding-right: 10px;">
-      <p id="sct-cuts-empty" class="empty-cell" style="text-align: center; color: var(--text-muted);">No cuts defined yet.</p>
+<!-- ── RESET LIBRARY MODAL ── -->
+<div id="modal-lib-reset" class="sm-overlay" role="alertdialog" aria-modal="true" aria-labelledby="reset-modal-title" tabindex="-1" hidden>
+  <div class="sm-container" style="max-width: 500px;">
+    <div class="sm-header">
+      <h2 id="reset-modal-title" style="font-size: 1.3rem;">Reset Library</h2>
+      <button type="button" id="btn-close-reset-modal" class="btn btn-sm btn-secondary" aria-label="Close reset dialog">Close</button>
     </div>
-    <div style="margin-top: 15px; display: flex; justify-content: flex-end; gap: 10px;">
-      <button id="btn-sct-manage-close" class="btn btn-secondary btn-sm" aria-label="Close dialog">Close</button>
-      <button id="btn-sct-delete-all" class="btn btn-danger btn-sm" style="display: none;">Delete All</button>
+    <div style="padding: 10px 0;">
+      <p style="color: var(--text-sub); font-size: 0.95rem; margin-bottom: 16px;">
+        Are you sure you want to reset the library? This action will permanently remove files from browser storage and memory.
+      </p>
+      <div class="control-group" style="background: var(--bg-main); padding: 14px 16px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+        <label for="chk-reset-include-defaults" style="display: flex; align-items: center; gap: 10px; cursor: pointer; text-transform: none; font-size: 0.95rem; color: var(--text); font-weight: 500;">
+          <input type="checkbox" id="chk-reset-include-defaults" style="width: 18px; height: 18px; accent-color: var(--danger); cursor: pointer;">
+          Delete all files including default sounds
+        </label>
+        <span style="font-size: 0.8rem; color: var(--text-dim); margin-top: 6px; display: block;">
+          If left unchecked, only your uploaded files will be deleted, and built-in procedural sounds will be preserved.
+        </span>
+      </div>
+    </div>
+    <div class="panel-actions" style="margin-top: 0; padding-top: 16px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px;">
+      <button type="button" id="btn-confirm-reset" class="btn btn-danger">Confirm Reset</button>
+      <button type="button" id="btn-cancel-reset" class="btn btn-secondary">Cancel</button>
     </div>
   </div>
-</dialog>
+</div>
+
+<!-- ── DELETE FILES BY SELECTION MODAL ── -->
+<div id="modal-lib-batch-delete" class="sm-overlay" role="dialog" aria-modal="true" aria-labelledby="batch-delete-modal-title" tabindex="-1" hidden>
+  <div class="sm-container" style="max-width: 620px; max-height: 85vh; display: flex; flex-direction: column;">
+    <div class="sm-header">
+      <h2 id="batch-delete-modal-title" style="font-size: 1.3rem;">Delete Files by Selection</h2>
+      <button type="button" id="btn-close-batch-modal" class="btn btn-sm btn-secondary" aria-label="Close batch delete dialog">Close</button>
+    </div>
+    <div style="padding: 12px 0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-bottom: 1px solid var(--border);">
+      <div class="menu-button-container">
+        <button type="button" id="btn-batch-sel-menu" class="btn btn-sm btn-secondary" aria-haspopup="menu" aria-expanded="false" aria-controls="batch-sel-menu">
+          Selection options
+        </button>
+        <div id="batch-sel-menu" role="menu" class="accessible-dropdown-menu" aria-labelledby="btn-batch-sel-menu" hidden>
+          <button type="button" role="menuitem" id="menu-item-sel-all" class="dropdown-menu-item">Select all</button>
+          <button type="button" role="menuitem" id="menu-item-desel-all" class="dropdown-menu-item">Deselect all</button>
+          <button type="button" role="menuitem" id="menu-item-invert-sel" class="dropdown-menu-item">Invert selection</button>
+          <button type="button" role="menuitem" id="menu-item-sel-user-only" class="dropdown-menu-item">Select only user files</button>
+        </div>
+      </div>
+      <span id="batch-sel-count-badge" class="selection-count-badge" aria-live="polite" style="font-size: 0.85rem; color: var(--accent); padding: 4px 10px; background: rgba(124, 111, 255, 0.1); border-radius: 4px; border: 1px solid var(--border);">0 files selected</span>
+    </div>
+    <div id="batch-file-list" role="list" aria-label="Select files to delete" style="flex: 1; overflow-y: auto; padding: 14px 0; max-height: 50vh; display: flex; flex-direction: column; gap: 8px;">
+      <!-- Populated dynamically -->
+    </div>
+    <div class="panel-actions" style="margin-top: 0; padding-top: 16px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px;">
+      <button type="button" id="btn-batch-delete-confirm" class="btn btn-danger">Delete Selected (0)</button>
+      <button type="button" id="btn-batch-delete-cancel" class="btn btn-secondary">Cancel</button>
+    </div>
+  </div>
 </div>
 
 <script src="https://unpkg.com/fix-webm-duration" crossorigin="anonymous"></script>
@@ -861,8 +973,8 @@ window.onerror = function(msg, url, line, col, error) {
 <script src="script_trim-audio.js"></script>
 <script src="script_trim-video.js"></script>
 <script src="script_super-merger.js"></script>
-<script src="script_super-trim.js"></script>
 <script src="script_super-cut.js"></script>
+<script src="script_super-trim.js"></script>
 <!-- Main Boot -->
 <script src="script_main.js"></script>
 

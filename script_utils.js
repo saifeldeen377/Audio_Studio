@@ -53,19 +53,63 @@ function announce(msg, assertive = false) {
     }
 }
 
-function setAppBackgroundInert(isInert) {
-  const elements = [
+function setAppBackgroundInert(isInert, activeModal = null) {
+  const baseElements = [
     document.querySelector('.app-header'),
     document.querySelector('.library-section'),
-    document.querySelector('.main-content')
+    document.querySelector('.main-content'),
+    document.querySelector('.app-footer')
   ];
-  elements.forEach(el =>{
-    if (el) {
-      el.inert = isInert;
-      if (isInert) el.setAttribute('aria-hidden', 'true');
-      else el.removeAttribute('aria-hidden');
+
+  const overlays = [
+    document.getElementById('super-mode-overlay'),
+    document.getElementById('super-trim-overlay'),
+    document.getElementById('super-cut-overlay'),
+    document.getElementById('modal-lib-reset'),
+    document.getElementById('modal-lib-batch-delete'),
+    document.getElementById('sm-calibration-dialog'),
+    document.getElementById('sm-manage-overlays-dialog'),
+    document.getElementById('sm-manage-effects-dialog'),
+    document.getElementById('sct-manage-dialog')
+  ];
+
+  if (activeModal) {
+    const all = [...baseElements, ...overlays];
+    all.forEach(el => {
+      if (el) {
+        if (el === activeModal || el.contains(activeModal) || activeModal.contains(el)) {
+          el.inert = false;
+          el.removeAttribute('aria-hidden');
+        } else {
+          el.inert = isInert;
+          if (isInert) el.setAttribute('aria-hidden', 'true');
+          else el.removeAttribute('aria-hidden');
+        }
+      }
+    });
+  } else {
+    baseElements.forEach(el => {
+      if (el) {
+        el.inert = isInert;
+        if (isInert) el.setAttribute('aria-hidden', 'true');
+        else el.removeAttribute('aria-hidden');
+      }
+    });
+    if (!isInert) {
+      overlays.forEach(ov => {
+        if (ov) {
+          ov.inert = false;
+          ov.removeAttribute('aria-hidden');
+        }
+      });
     }
-  });
+  }
+
+  if (isInert) {
+    document.body.style.overflow = 'hidden';
+  } else {
+    document.body.style.overflow = '';
+  }
 }
 
 function setupFocusTrap(container) {
@@ -80,13 +124,15 @@ function setupFocusTrap(container) {
         if (el.getAttribute('aria-hidden') === 'true') return false;
         if (el.closest('[hidden]') || el.closest('[inert]') || el.closest('[aria-hidden="true"]')) return false;
         if (el.closest('#sm-setup-view') && container.classList.contains('sm-live-active')) return false;
-        if (el.offsetParent === null) return false;
         const style = window.getComputedStyle(el);
         if (style.display === 'none' || style.visibility === 'hidden') return false;
         return true;
       });
       
-      if (focusableElements.length === 0) return;
+      if (focusableElements.length === 0) {
+        e.preventDefault();
+        return;
+      }
       
       const firstElement = focusableElements[0];
       const lastElement = focusableElements[focusableElements.length - 1];
@@ -101,6 +147,28 @@ function setupFocusTrap(container) {
           firstElement.focus();
           e.preventDefault();
         }
+      }
+    }
+  });
+
+  // Circular focus guard: prevent focus escaping to browser chrome/sidebar while container is visible
+  document.addEventListener('focusin', function(e) {
+    if (container.hidden || window.getComputedStyle(container).display === 'none') return;
+    if (container.hasAttribute('inert') || container.getAttribute('aria-hidden') === 'true') return;
+    if (e.target.closest('dialog[open], .sm-overlay:not([hidden])') && !container.contains(e.target)) {
+      return;
+    }
+    if (!container.contains(e.target)) {
+      const focusableElements = Array.from(container.querySelectorAll(
+        'button, [href], input, select, textarea, [tabindex]'
+      )).filter(el => {
+        if (el.disabled || el.getAttribute('tabindex') === '-1' || el.getAttribute('aria-hidden') === 'true') return false;
+        if (el.closest('[hidden]') || el.closest('[inert]') || el.closest('[aria-hidden="true"]')) return false;
+        const style = window.getComputedStyle(el);
+        return style.display !== 'none' && style.visibility !== 'hidden';
+      });
+      if (focusableElements.length > 0) {
+        focusableElements[0].focus();
       }
     }
   });

@@ -40,6 +40,11 @@ function initTrimAudio() {
   const btnStop = document.getElementById('btn-ta-stop');
 
   btnPreview.addEventListener('click', async () =>{
+  if (window.taDeletedAssetName) {
+    const proceed = confirm(`The file "${window.taDeletedAssetName}" was deleted from the library. Do you want to continue without it?`);
+    if (!proceed) return;
+    window.taDeletedAssetName = null;
+  }
   const assetId = document.getElementById('ta-audio-select').value;
   if (!assetId) { alert('Please select an audio file from the library.'); return; }
 

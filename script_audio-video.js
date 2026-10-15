@@ -75,6 +75,12 @@ function initAudioToVideo() {
 
   if (btnPreview) {
     btnPreview.addEventListener('click', async () =>{
+      if (window.avDeletedSlideNames && window.avDeletedSlideNames.length > 0) {
+        const names = window.avDeletedSlideNames.join(', ');
+        const proceed = confirm(`The slide(s) "${names}" were deleted from the library. Do you want to continue without them?`);
+        if (!proceed) return;
+        window.avDeletedSlideNames = [];
+      }
       const audioAssetId = document.getElementById('av-audio-select').value;
       if (!audioAssetId) { alert('Please select an audio file in Step 1.'); return; }
       if (avSlides.length === 0) { alert('Please add at least one image slide in Step 2.'); return; }

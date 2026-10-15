@@ -2,6 +2,356 @@
 // SHARED MEDIA LIBRARY
 // ─────────────────────────────────────────────────────────────
 
+const activeLibraryAudios = {};
+const batchSelectedAssetIds = new Set();
+let activeOpenDropdownMenu = null;
+
+function setupDropdownMenu(buttonId, menuId) {
+  const btn = document.getElementById(buttonId);
+  const menu = document.getElementById(menuId);
+  if (!btn || !menu) return;
+
+  function openMenu() {
+    if (activeOpenDropdownMenu && activeOpenDropdownMenu !== menu) {
+      activeOpenDropdownMenu.hidden = true;
+      const otherBtn = document.querySelector(`[aria-controls="${activeOpenDropdownMenu.id}"]`);
+      if (otherBtn) otherBtn.setAttribute('aria-expanded', 'false');
+    }
+
+    menu.hidden = false;
+    btn.setAttribute('aria-expanded', 'true');
+    activeOpenDropdownMenu = menu;
+
+    const items = getMenuItems(menu);
+    if (items.length > 0) {
+      items[0].focus();
+    }
+  }
+
+  function closeMenu(focusBtn = true) {
+    menu.hidden = true;
+    btn.setAttribute('aria-expanded', 'false');
+    if (activeOpenDropdownMenu === menu) activeOpenDropdownMenu = null;
+    if (focusBtn) btn.focus();
+  }
+
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (menu.hidden) openMenu();
+    else closeMenu(false);
+  });
+
+  btn.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      openMenu();
+      const items = getMenuItems(menu);
+      if (e.key === 'ArrowUp' && items.length > 0) {
+        items[items.length - 1].focus();
+      }
+    }
+  });
+
+  menu.addEventListener('keydown', (e) => {
+    const items = getMenuItems(menu);
+    const currentIndex = items.indexOf(document.activeElement);
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (items.length > 0) {
+        const nextIndex = (currentIndex + 1) % items.length;
+        items[nextIndex].focus();
+      }
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (items.length > 0) {
+        const prevIndex = (currentIndex - 1 + items.length) % items.length;
+        items[prevIndex].focus();
+      }
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      if (items.length > 0) items[0].focus();
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      if (items.length > 0) items[items.length - 1].focus();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      closeMenu(true);
+    } else if (e.key === 'Tab') {
+      closeMenu(false);
+    }
+  });
+}
+
+function getMenuItems(menu) {
+  return Array.from(menu.querySelectorAll('[role="menuitem"]:not([disabled]):not([aria-disabled="true"])')).filter(el => {
+    return window.getComputedStyle(el).display !== 'none';
+  });
+}
+
+// Global click outside to close dropdowns
+document.addEventListener('click', (e) => {
+  if (activeOpenDropdownMenu && !activeOpenDropdownMenu.contains(e.target)) {
+    const btn = document.querySelector(`[aria-controls="${activeOpenDropdownMenu.id}"]`);
+    if (btn && !btn.contains(e.target)) {
+      activeOpenDropdownMenu.hidden = true;
+      btn.setAttribute('aria-expanded', 'false');
+      activeOpenDropdownMenu = null;
+    }
+  }
+});
+
+window.updateLibraryMenuItemsVisibility = function() {
+  const btn = document.getElementById('btn-lib-more-options');
+  const itemReset = document.getElementById('menu-item-reset');
+  const itemBatch = document.getElementById('menu-item-batch-delete');
+  const itemRestore = document.getElementById('menu-item-restore-defaults');
+
+  const isEmpty = assetLibrary.length === 0;
+  const hasMissing = typeof window.hasMissingDefaultSounds === 'function' ? window.hasMissingDefaultSounds() : false;
+
+  // The more options button itself is ALWAYS enabled and clickable
+  if (btn) {
+    btn.disabled = false;
+    btn.removeAttribute('aria-disabled');
+  }
+
+  if (isEmpty) {
+    // When library is empty, hide reset & batch delete, show restore defaults
+    if (itemReset) itemReset.style.display = 'none';
+    if (itemBatch) itemBatch.style.display = 'none';
+    if (itemRestore) itemRestore.style.display = 'block';
+  } else {
+    // When files exist, show reset & batch delete
+    if (itemReset) itemReset.style.display = 'block';
+    if (itemBatch) itemBatch.style.display = 'block';
+    // Restore defaults is only visible if any default sounds are missing
+    if (itemRestore) itemRestore.style.display = hasMissing ? 'block' : 'none';
+  }
+};
+
+function openResetModal() {
+  const modal = document.getElementById('modal-lib-reset');
+  const chkDefaults = document.getElementById('chk-reset-include-defaults');
+  const confirmBtn = document.getElementById('btn-confirm-reset');
+  const closeBtn = document.getElementById('btn-close-reset-modal');
+  if (!modal) return;
+
+  if (chkDefaults) chkDefaults.checked = false;
+  modal.hidden = false;
+  modal.style.display = 'flex';
+  setAppBackgroundInert(true, modal);
+
+  if (confirmBtn) confirmBtn.focus();
+  else if (closeBtn) closeBtn.focus();
+}
+
+function closeResetModal() {
+  const modal = document.getElementById('modal-lib-reset');
+  if (modal) {
+    modal.hidden = true;
+    modal.style.display = 'none';
+  }
+  setAppBackgroundInert(false);
+  const btn = document.getElementById('btn-lib-more-options');
+  if (btn) btn.focus();
+}
+
+async function handleConfirmReset() {
+  const chkDefaults = document.getElementById('chk-reset-include-defaults');
+  const includeDefaults = chkDefaults ? chkDefaults.checked : false;
+
+  stopAllLibraryPreviews();
+
+  if (includeDefaults) {
+    const allIds = assetLibrary.map(a => a.id);
+    allIds.forEach(id => {
+      cleanupSingleAsset(id, true);
+    });
+    closeResetModal();
+    renderLibrary();
+    populateAllSelects();
+    window.updateLibraryMenuItemsVisibility();
+    announce('Library has been completely reset. All files including default sounds have been deleted.');
+  } else {
+    const userAssets = assetLibrary.filter(a => !a.id.startsWith('asset-pre-'));
+    userAssets.forEach(a => {
+      cleanupSingleAsset(a.id, true);
+    });
+    closeResetModal();
+    renderLibrary();
+    populateAllSelects();
+    window.updateLibraryMenuItemsVisibility();
+    announce('Library reset. All user uploaded files were deleted and default sounds preserved.');
+  }
+}
+
+function openBatchDeleteModal() {
+  const modal = document.getElementById('modal-lib-batch-delete');
+  if (!modal) return;
+
+  batchSelectedAssetIds.clear();
+  renderBatchFileList();
+  updateBatchDeleteButtonAndBadge();
+
+  modal.hidden = false;
+  modal.style.display = 'flex';
+  setAppBackgroundInert(true, modal);
+
+  const firstChk = modal.querySelector('.batch-file-checkbox');
+  const closeBtn = document.getElementById('btn-close-batch-modal');
+  if (firstChk) firstChk.focus();
+  else if (closeBtn) closeBtn.focus();
+}
+
+function closeBatchDeleteModal() {
+  const modal = document.getElementById('modal-lib-batch-delete');
+  if (modal) {
+    modal.hidden = true;
+    modal.style.display = 'none';
+  }
+  setAppBackgroundInert(false);
+  batchSelectedAssetIds.clear();
+  const btn = document.getElementById('btn-lib-more-options');
+  if (btn) btn.focus();
+}
+
+function renderBatchFileList() {
+  const listContainer = document.getElementById('batch-file-list');
+  if (!listContainer) return;
+  listContainer.innerHTML = '';
+
+  if (assetLibrary.length === 0) {
+    listContainer.innerHTML = '<p class="empty-hint" style="text-align: center; padding: 20px;">No files available in the library.</p>';
+    return;
+  }
+
+  assetLibrary.forEach(asset => {
+    const isDefault = asset.id.startsWith('asset-pre-');
+    const isChecked = batchSelectedAssetIds.has(asset.id);
+
+    const item = document.createElement('div');
+    item.className = 'batch-file-item';
+    item.setAttribute('role', 'listitem');
+
+    item.innerHTML = `
+      <label style="display: flex; align-items: center; gap: 12px; cursor: pointer; width: 100%;">
+        <input type="checkbox" class="batch-file-checkbox" data-asset-id="${asset.id}" ${isChecked ? 'checked' : ''} aria-label="Select ${escapeHTML(asset.name)} for deletion">
+        <span style="font-weight: 600; color: var(--text);">${escapeHTML(asset.name)}</span>
+        <span style="font-size: 0.8rem; color: var(--text-dim); text-transform: uppercase;">(${asset.type})</span>
+        ${isDefault ? '<span style="color: var(--accent); font-size: 0.8rem; font-weight: 600; margin-left: 6px;">(Default Sound)</span>' : ''}
+      </label>
+    `;
+
+    listContainer.appendChild(item);
+  });
+
+  const checkboxes = Array.from(listContainer.querySelectorAll('.batch-file-checkbox'));
+  checkboxes.forEach((chk, idx) => {
+    chk.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const next = checkboxes[(idx + 1) % checkboxes.length];
+        if (next) next.focus();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        const prev = checkboxes[(idx - 1 + checkboxes.length) % checkboxes.length];
+        if (prev) prev.focus();
+      }
+    });
+  });
+}
+
+function updateBatchDeleteButtonAndBadge() {
+  const badge = document.getElementById('batch-sel-count-badge');
+  const confirmBtn = document.getElementById('btn-batch-delete-confirm');
+  const count = batchSelectedAssetIds.size;
+
+  if (badge) {
+    badge.textContent = `${count} ${count === 1 ? 'file' : 'files'} selected`;
+  }
+  if (confirmBtn) {
+    confirmBtn.textContent = `Delete Selected (${count})`;
+    confirmBtn.disabled = count === 0;
+  }
+}
+
+function handleBatchDeleteConfirm() {
+  const count = batchSelectedAssetIds.size;
+  if (count === 0) {
+    alert('No files selected. Please select at least one file to delete.');
+    return;
+  }
+
+  if (!confirm(`Are you sure you want to delete ${count} selected file(s) from the library? This action cannot be undone.`)) {
+    return;
+  }
+
+  stopAllLibraryPreviews();
+  const idsToDelete = Array.from(batchSelectedAssetIds);
+  idsToDelete.forEach(id => {
+    cleanupSingleAsset(id, true);
+  });
+
+  batchSelectedAssetIds.clear();
+  closeBatchDeleteModal();
+  renderLibrary();
+  populateAllSelects();
+  window.updateLibraryMenuItemsVisibility();
+  announce(`${count} file(s) deleted from library.`);
+}
+
+function executeBatchSelectionOption(action) {
+  const checkboxes = document.querySelectorAll('.batch-file-checkbox');
+
+  if (action === 'select_all') {
+    assetLibrary.forEach(a => batchSelectedAssetIds.add(a.id));
+    checkboxes.forEach(chk => { chk.checked = true; });
+    updateBatchDeleteButtonAndBadge();
+    announce(`All ${batchSelectedAssetIds.size} files selected.`);
+  } else if (action === 'deselect_all') {
+    batchSelectedAssetIds.clear();
+    checkboxes.forEach(chk => { chk.checked = false; });
+    updateBatchDeleteButtonAndBadge();
+    announce('All files deselected.');
+  } else if (action === 'invert') {
+    assetLibrary.forEach(a => {
+      if (batchSelectedAssetIds.has(a.id)) {
+        batchSelectedAssetIds.delete(a.id);
+      } else {
+        batchSelectedAssetIds.add(a.id);
+      }
+    });
+    checkboxes.forEach(chk => {
+      const id = chk.getAttribute('data-asset-id');
+      chk.checked = batchSelectedAssetIds.has(id);
+    });
+    updateBatchDeleteButtonAndBadge();
+    announce(`Selection inverted: ${batchSelectedAssetIds.size} files selected.`);
+  } else if (action === 'user_only') {
+    batchSelectedAssetIds.clear();
+    assetLibrary.forEach(a => {
+      if (!a.id.startsWith('asset-pre-')) {
+        batchSelectedAssetIds.add(a.id);
+      }
+    });
+    checkboxes.forEach(chk => {
+      const id = chk.getAttribute('data-asset-id');
+      chk.checked = batchSelectedAssetIds.has(id);
+    });
+    updateBatchDeleteButtonAndBadge();
+    announce(`${batchSelectedAssetIds.size} user file(s) selected.`);
+  }
+
+  const menu = document.getElementById('batch-sel-menu');
+  if (menu) menu.hidden = true;
+  const btn = document.getElementById('btn-batch-sel-menu');
+  if (btn) {
+    btn.setAttribute('aria-expanded', 'false');
+    btn.focus();
+  }
+}
+
 function getUniqueAssetName(requestedName) {
   let name = (requestedName || '').trim();
   if (!name) name = "Untitled";
@@ -82,8 +432,113 @@ function initLibrary() {
 
  nameInput.value = '';
  fileInput.value = '';
- announce(`"${name}"added to the library.`);
+ announce(`"${name}" added to the library.`);
  });
+
+ // ── MORE LIBRARY OPTIONS & BATCH SELECTION MENUS ──
+ setupDropdownMenu('btn-lib-more-options', 'lib-more-menu');
+ setupDropdownMenu('btn-batch-sel-menu', 'batch-sel-menu');
+ setupFocusTrap(document.getElementById('modal-lib-reset'));
+ setupFocusTrap(document.getElementById('modal-lib-batch-delete'));
+
+ const itemReset = document.getElementById('menu-item-reset');
+ if (itemReset) {
+ itemReset.addEventListener('click', () => {
+ const menu = document.getElementById('lib-more-menu');
+ if (menu) menu.hidden = true;
+ const btn = document.getElementById('btn-lib-more-options');
+ if (btn) btn.setAttribute('aria-expanded', 'false');
+ openResetModal();
+ });
+ }
+
+ const itemBatch = document.getElementById('menu-item-batch-delete');
+ if (itemBatch) {
+ itemBatch.addEventListener('click', () => {
+ const menu = document.getElementById('lib-more-menu');
+ if (menu) menu.hidden = true;
+ const btn = document.getElementById('btn-lib-more-options');
+ if (btn) btn.setAttribute('aria-expanded', 'false');
+ openBatchDeleteModal();
+ });
+ }
+
+ const itemRestore = document.getElementById('menu-item-restore-defaults');
+ if (itemRestore) {
+ itemRestore.addEventListener('click', async () => {
+ const menu = document.getElementById('lib-more-menu');
+ if (menu) menu.hidden = true;
+ const btn = document.getElementById('btn-lib-more-options');
+ if (btn) {
+ btn.setAttribute('aria-expanded', 'false');
+ btn.focus();
+ }
+ if (typeof window.restoreMissingDefaultSounds === 'function') {
+ const restored = await window.restoreMissingDefaultSounds();
+ announce(`${restored} default sound(s) restored.`);
+ }
+ });
+ }
+
+ // ── RESET MODAL BUTTONS ──
+ const btnCloseReset = document.getElementById('btn-close-reset-modal');
+ const btnCancelReset = document.getElementById('btn-cancel-reset');
+ const btnConfirmReset = document.getElementById('btn-confirm-reset');
+
+ if (btnCloseReset) btnCloseReset.addEventListener('click', closeResetModal);
+ if (btnCancelReset) btnCancelReset.addEventListener('click', closeResetModal);
+ if (btnConfirmReset) btnConfirmReset.addEventListener('click', handleConfirmReset);
+
+ // ── BATCH DELETE MODAL BUTTONS ──
+ const btnCloseBatch = document.getElementById('btn-close-batch-modal');
+ const btnCancelBatch = document.getElementById('btn-batch-delete-cancel');
+ const btnConfirmBatch = document.getElementById('btn-batch-delete-confirm');
+
+ if (btnCloseBatch) btnCloseBatch.addEventListener('click', closeBatchDeleteModal);
+ if (btnCancelBatch) btnCancelBatch.addEventListener('click', closeBatchDeleteModal);
+ if (btnConfirmBatch) btnConfirmBatch.addEventListener('click', handleBatchDeleteConfirm);
+
+ // Batch selection menu options
+ const itemSelAll = document.getElementById('menu-item-sel-all');
+ const itemDeselAll = document.getElementById('menu-item-desel-all');
+ const itemInvertSel = document.getElementById('menu-item-invert-sel');
+ const itemSelUserOnly = document.getElementById('menu-item-sel-user-only');
+
+ if (itemSelAll) itemSelAll.addEventListener('click', () => executeBatchSelectionOption('select_all'));
+ if (itemDeselAll) itemDeselAll.addEventListener('click', () => executeBatchSelectionOption('deselect_all'));
+ if (itemInvertSel) itemInvertSel.addEventListener('click', () => executeBatchSelectionOption('invert'));
+ if (itemSelUserOnly) itemSelUserOnly.addEventListener('click', () => executeBatchSelectionOption('user_only'));
+
+ // Batch file list checkboxes change
+ const batchList = document.getElementById('batch-file-list');
+ if (batchList) {
+ batchList.addEventListener('change', (e) => {
+ if (e.target && e.target.classList.contains('batch-file-checkbox')) {
+ const id = e.target.getAttribute('data-asset-id');
+ if (e.target.checked) batchSelectedAssetIds.add(id);
+ else batchSelectedAssetIds.delete(id);
+ updateBatchDeleteButtonAndBadge();
+ }
+ });
+ }
+
+ // Global Escape key closes any active modal
+ document.addEventListener('keydown', (e) => {
+ if (e.key === 'Escape') {
+ const resetModal = document.getElementById('modal-lib-reset');
+ if (resetModal && !resetModal.hidden) {
+ closeResetModal();
+ return;
+ }
+ const batchModal = document.getElementById('modal-lib-batch-delete');
+ if (batchModal && !batchModal.hidden) {
+ closeBatchDeleteModal();
+ return;
+ }
+ }
+ });
+
+ window.updateLibraryMenuItemsVisibility();
 }
 
 function renderLibrary() {
@@ -92,6 +547,7 @@ function renderLibrary() {
 
  if (assetLibrary.length === 0) {
  container.innerHTML = '<p class="empty-hint">No files uploaded yet. Upload a file above to get started.</p>';
+ if (typeof window.updateLibraryMenuItemsVisibility === 'function') window.updateLibraryMenuItemsVisibility();
  return;
  }
 
@@ -125,13 +581,15 @@ function renderLibrary() {
 <button id="btn-stop-${asset.id}" class="btn btn-sm btn-danger" onclick="stopLibraryPreview('${asset.id}')" aria-label="Stop preview for ${escapeHTML(asset.name)}" style="display: none;">Stop</button>
 <button class="btn btn-sm btn-danger"
  onclick="removeAsset('${asset.id}')"
- aria-label="Remove ${escapeHTML(asset.name)} from library"></button>
+ aria-label="Remove ${escapeHTML(asset.name)} from library">Remove</button>
 </div>
 </div>
 <div id="preview-container-${asset.id}"class="library-item-preview"hidden></div>
  `;
  container.appendChild(item);
  });
+
+ if (typeof window.updateLibraryMenuItemsVisibility === 'function') window.updateLibraryMenuItemsVisibility();
 }
 
 window.downloadAsset = function(id) {
@@ -164,8 +622,6 @@ window.downloadAsset = function(id) {
   downloadBlob(asset.file, filename);
   announce(`Downloading ${asset.name}.`);
 };
-
-const activeLibraryAudios = {};
 
 function stopAllLibraryPreviews() {
  window.lastEndedPreview = null;
@@ -417,6 +873,213 @@ window.stopLibraryPreview = function(id) {
   if (stopBtn) stopBtn.style.display = 'none';
 };
 
+function cleanupSingleAsset(id, deleteFromDB = true) {
+  const asset = getAsset(id);
+  const assetName = asset ? asset.name : '';
+
+  // Stop preview if this specific asset is currently playing in library
+  if (activeLibraryAudios[id]) {
+    try { activeLibraryAudios[id].pause(); } catch (_) {}
+    delete activeLibraryAudios[id];
+  }
+  const videoContainer = document.getElementById(`preview-container-${id}`);
+  if (videoContainer && !videoContainer.hidden) {
+    const vid = videoContainer.querySelector('video');
+    if (vid) { try { vid.pause(); } catch (_) {} }
+    videoContainer.innerHTML = '';
+    videoContainer.hidden = true;
+  }
+
+  const idx = assetLibrary.findIndex(a => a.id === id);
+  if (idx !== -1) { 
+    try { URL.revokeObjectURL(assetLibrary[idx].objectURL); } catch (_) {}
+    assetLibrary.splice(idx, 1); 
+  }
+
+  // 1. Super Merger: Base Audio
+  if (typeof smBaseAsset !== 'undefined' && smBaseAsset && smBaseAsset.id === id) {
+    window.smDeletedBaseAssetName = assetName;
+    smBaseAsset = null;
+    const baseSel = document.getElementById('sm-base-select');
+    if (baseSel) baseSel.value = '';
+    if (typeof smBaseAudio !== 'undefined' && smBaseAudio) {
+      try { smBaseAudio.stop(); } catch (_) {}
+      smBaseAudio = null;
+    }
+    const baseVolVal = document.getElementById('sm-base-vol-val');
+    if (baseVolVal) baseVolVal.textContent = '100';
+    const baseVol = document.getElementById('sm-base-volume');
+    if (baseVol) baseVol.value = '100';
+    if (typeof updateSmBaseModeUI === 'function') updateSmBaseModeUI(false);
+    if (typeof updateSmGoButton === 'function') updateSmGoButton();
+  }
+
+  // 2. Super Merger: Overlays & Recorded Clips
+  if (typeof smOverlays !== 'undefined') {
+    const removedOverlays = smOverlays.filter(o => o.assetId === id);
+    if (removedOverlays.length > 0) {
+      if (!window.smDeletedOverlayNames) window.smDeletedOverlayNames = [];
+      removedOverlays.forEach(o => {
+        if (!window.smDeletedOverlayNames.includes(o.name)) {
+          window.smDeletedOverlayNames.push(o.name);
+        }
+      });
+      const remainingSmO = smOverlays.filter(o => o.assetId !== id);
+      smOverlays.length = 0;
+      smOverlays.push(...remainingSmO);
+      if (typeof renderSmShortcutsTable === 'function') renderSmShortcutsTable();
+      if (typeof renderManageOverlaysList === 'function') renderManageOverlaysList();
+      if (typeof updateSmGoButton === 'function') updateSmGoButton();
+    }
+  }
+  if (typeof smRecordedClips !== 'undefined') {
+    const remainingSm = smRecordedClips.filter(c => c.assetId !== id);
+    smRecordedClips.length = 0;
+    smRecordedClips.push(...remainingSm);
+  }
+
+  // 3. Merge Audio
+  if (typeof maClips !== 'undefined') {
+    const removedMa = maClips.filter(c => c.assetId === id);
+    if (removedMa.length > 0) {
+      if (!window.maDeletedClipNames) window.maDeletedClipNames = [];
+      removedMa.forEach(c => {
+        if (!window.maDeletedClipNames.includes(c.name)) window.maDeletedClipNames.push(c.name);
+      });
+      const remainingMa = maClips.filter(c => c.assetId !== id);
+      maClips.length = 0;
+      maClips.push(...remainingMa);
+      if (typeof renderMaTable === 'function') renderMaTable();
+    }
+    const maSelect = document.getElementById('ma-sound-select');
+    if (maSelect && maSelect.value === id) maSelect.value = '';
+  }
+
+  // 4. Merge Video
+  if (typeof mvClips !== 'undefined') {
+    const removedMv = mvClips.filter(c => c.assetId === id);
+    if (removedMv.length > 0) {
+      if (!window.mvDeletedClipNames) window.mvDeletedClipNames = [];
+      removedMv.forEach(c => {
+        if (!window.mvDeletedClipNames.includes(c.name)) window.mvDeletedClipNames.push(c.name);
+      });
+      const remainingMv = mvClips.filter(c => c.assetId !== id);
+      mvClips.length = 0;
+      mvClips.push(...remainingMv);
+      if (typeof renderMvTable === 'function') renderMvTable();
+    }
+    const mvSelect = document.getElementById('mv-video-select');
+    if (mvSelect && mvSelect.value === id) mvSelect.value = '';
+  }
+
+  // 5. Audio to Video
+  if (typeof avSlides !== 'undefined') {
+    const removedAv = avSlides.filter(c => c.assetId === id);
+    if (removedAv.length > 0) {
+      if (!window.avDeletedSlideNames) window.avDeletedSlideNames = [];
+      removedAv.forEach(c => {
+        if (!window.avDeletedSlideNames.includes(c.name)) window.avDeletedSlideNames.push(c.name);
+      });
+      const remainingAv = avSlides.filter(c => c.assetId !== id);
+      avSlides.length = 0;
+      avSlides.push(...remainingAv);
+      if (typeof renderAvTable === 'function') renderAvTable();
+    }
+    const avAudioSel = document.getElementById('av-audio-select');
+    if (avAudioSel && avAudioSel.value === id) avAudioSel.value = '';
+    const avImgSel = document.getElementById('av-image-select');
+    if (avImgSel && avImgSel.value === id) avImgSel.value = '';
+  }
+
+  // 6. Video to Audio
+  const vaSel = document.getElementById('va-video-select');
+  if (vaSel && vaSel.value === id) {
+    window.vaDeletedAssetName = assetName;
+    vaSel.value = '';
+  }
+
+  // 7. Trim Video
+  const tvSel = document.getElementById('tv-video-select');
+  if (tvSel && tvSel.value === id) {
+    window.tvDeletedAssetName = assetName;
+    tvSel.value = '';
+  }
+
+  // 8. Trim Audio
+  const taSelect = document.getElementById('ta-audio-select');
+  if (taSelect && taSelect.value === id) {
+    window.taDeletedAssetName = assetName;
+    taSelect.value = '';
+  }
+  if (typeof trimAudioCacheId !== 'undefined' && trimAudioCacheId === id) {
+    window.taDeletedAssetName = assetName;
+    trimAudioCacheId = null;
+    trimAudioCacheBuffer = null;
+    if (typeof trimPreviewSource !== 'undefined' && trimPreviewSource) {
+      try { trimPreviewSource.stop(); } catch (_) {}
+      trimPreviewSource = null;
+    }
+  }
+
+  // 9. Super Trim
+  const staSelect = document.getElementById('sta-audio-select');
+  if (staSelect && staSelect.value === id) {
+    window.staDeletedAssetName = assetName;
+    staSelect.value = '';
+  }
+  if (typeof currentStaAssetId !== 'undefined' && currentStaAssetId === id) {
+    window.staDeletedAssetName = assetName;
+    currentStaAssetId = null;
+    if (typeof trimBuffer !== 'undefined') trimBuffer = null;
+    if (typeof trimPlaySource !== 'undefined' && trimPlaySource) {
+      try { trimPlaySource.stop(); } catch (_) {}
+      trimPlaySource = null;
+    }
+    const timeDisplay = document.getElementById('sta-time-display');
+    if (timeDisplay) timeDisplay.textContent = '00:00.0';
+    const startDisplay = document.getElementById('sta-start-display');
+    if (startDisplay) startDisplay.textContent = 'Not set';
+    const endDisplay = document.getElementById('sta-end-display');
+    if (endDisplay) endDisplay.textContent = 'Not set';
+  }
+
+  // 10. Super Cut
+  const sctSelect = document.getElementById('sct-audio-select');
+  if (sctSelect && sctSelect.value === id) {
+    window.sctDeletedAssetName = assetName;
+    sctSelect.value = '';
+  }
+  if (typeof currentsctAssetId !== 'undefined' && currentsctAssetId === id) {
+    window.sctDeletedAssetName = assetName;
+    currentsctAssetId = null;
+    if (typeof sctBuffer !== 'undefined') sctBuffer = null;
+    if (typeof sctCutRegions !== 'undefined') sctCutRegions = [];
+    if (typeof sctActiveCut !== 'undefined') sctActiveCut = { start: null, end: null, id: null };
+    if (typeof sctPlaySource !== 'undefined' && sctPlaySource) {
+      try { sctPlaySource.stop(); } catch (_) {}
+      sctPlaySource = null;
+    }
+    const timeDisplay = document.getElementById('sct-time-display');
+    if (timeDisplay) timeDisplay.textContent = '00:00.0';
+    const startDisplay = document.getElementById('sct-start-display');
+    if (startDisplay) startDisplay.textContent = 'Not set';
+    const endDisplay = document.getElementById('sct-end-display');
+    if (endDisplay) endDisplay.textContent = 'Not set';
+    const countEl = document.getElementById('sct-cuts-count');
+    if (countEl) countEl.textContent = '0';
+  }
+
+  // Remove decoded buffer from memory to prevent RAM leaks
+  if (decodedAudioBuffers[id]) {
+    delete decodedAudioBuffers[id];
+  }
+
+  // Remove from IndexedDB as well
+  if (deleteFromDB && typeof dbDeleteAsset === 'function') {
+    dbDeleteAsset(id);
+  }
+}
+
 window.removeAsset = function(id) {
   setTimeout(() => {
     const asset = getAsset(id);
@@ -426,92 +1089,16 @@ window.removeAsset = function(id) {
       return; // User cancelled
     }
 
-    // Stop preview if this specific asset is currently playing
-    if (activeLibraryAudios[id]) {
-      activeLibraryAudios[id].pause();
-      delete activeLibraryAudios[id];
+    cleanupSingleAsset(id, true);
+    if (batchSelectedAssetIds.has(id)) {
+      batchSelectedAssetIds.delete(id);
     }
-    const videoContainer = document.getElementById(`preview-container-${id}`);
-    if (videoContainer && !videoContainer.hidden) {
-      const vid = videoContainer.querySelector('video');
-      if (vid) { try { vid.pause(); } catch (_) {} }
-      videoContainer.innerHTML = '';
-      videoContainer.hidden = true;
+    renderLibrary();
+    populateAllSelects();
+    if (typeof window.updateLibraryMenuItemsVisibility === 'function') {
+      window.updateLibraryMenuItemsVisibility();
     }
-  
-    const idx = assetLibrary.findIndex(a =>a.id === id);
-    if (idx !== -1) { 
-      URL.revokeObjectURL(assetLibrary[idx].objectURL); 
-      assetLibrary.splice(idx, 1); 
-    }
-
- // Clean up orphaned data from other tools'timelines
- if (typeof maClips !== 'undefined') {
- const initialMa = maClips.length;
- const remainingMa = maClips.filter(c =>c.assetId !== id);
- maClips.length = 0;
- maClips.push(...remainingMa);
- if (initialMa !== maClips.length && typeof renderMaTable === 'function') renderMaTable();
- }
- if (typeof mvClips !== 'undefined') {
- const initialMv = mvClips.length;
- const remainingMv = mvClips.filter(c =>c.assetId !== id);
- mvClips.length = 0;
- mvClips.push(...remainingMv);
- if (initialMv !== mvClips.length && typeof renderMvTable === 'function') renderMvTable();
- }
- if (typeof avSlides !== 'undefined') {
- const initialAv = avSlides.length;
- const remainingAv = avSlides.filter(c =>c.assetId !== id);
- avSlides.length = 0;
- avSlides.push(...remainingAv);
- if (initialAv !== avSlides.length && typeof renderAvTable === 'function') renderAvTable();
- }
-  if (typeof smRecordedClips !== 'undefined') {
-  const remainingSm = smRecordedClips.filter(c =>c.assetId !== id);
-  smRecordedClips.length = 0;
-  smRecordedClips.push(...remainingSm);
-  }
-  if (typeof smOverlays !== 'undefined') {
-  const initialSmO = smOverlays.length;
-  const remainingSmO = smOverlays.filter(c =>c.assetId !== id);
-  smOverlays.length = 0;
-  smOverlays.push(...remainingSmO);
-  if (initialSmO !== smOverlays.length && typeof renderSmShortcutsTable === 'function') renderSmShortcutsTable();
-  }
-  if (typeof smBaseAsset !== 'undefined'&& smBaseAsset && smBaseAsset.id === id) {
-    smBaseAsset = null;
-    const goBtn = document.getElementById('btn-sm-go');
-    if (goBtn) goBtn.disabled = true;
-    const baseVolVal = document.getElementById('sm-base-vol-val');
-    if (baseVolVal) baseVolVal.textContent = '100';
-  }
-
-  // Remove decoded buffer from memory to prevent RAM leaks
-  if (decodedAudioBuffers[id]) {
-  delete decodedAudioBuffers[id];
-  }
-  
-  // Clear tool-specific memory caches to prevent leaks
-  if (typeof trimAudioCacheId !== 'undefined'&& trimAudioCacheId === id) {
-  trimAudioCacheId = null;
-  trimAudioCacheBuffer = null;
-  }
-  if (typeof currentStaAssetId !== 'undefined'&& currentStaAssetId === id) {
-  currentStaAssetId = null;
-  trimBuffer = null;
-  }
-  if (typeof currentsctAssetId !== 'undefined'&& currentsctAssetId === id) {
-  currentsctAssetId = null;
-  if (typeof sctBuffer !== 'undefined') sctBuffer = null;
-  if (typeof sctCutRegions !== 'undefined') sctCutRegions = [];
-  if (typeof sctActiveCut !== 'undefined') sctActiveCut = { start: null, end: null, id: null };
-  }
- // Remove from IndexedDB as well
-   dbDeleteAsset(id);
-   renderLibrary();
-   populateAllSelects();
-   announce('Asset removed from library.');
+    announce('Asset removed from library.');
   }, 50);
 };
 
@@ -542,10 +1129,21 @@ function populateAllSelects() {
  opt.textContent = `${a.name} (${a.type})`;
  sel.appendChild(opt);
  });
+ if (id === 'sm-base-select') {
+   const noBaseOpt = document.createElement('option');
+   noBaseOpt.value = 'no_base';
+   noBaseOpt.textContent = 'no base, record overlays only';
+   sel.appendChild(noBaseOpt);
+ }
  // Restore previous selection if still available
- if (assetLibrary.find(a =>a.id === prev)) sel.value = prev;
+ if (id === 'sm-base-select' && prev === 'no_base') sel.value = 'no_base';
+ else if (assetLibrary.find(a =>a.id === prev)) sel.value = prev;
  else sel.value = '';
  });
+ if (typeof updateSmBaseModeUI === 'function') {
+   const bs = document.getElementById('sm-base-select');
+   if (bs) updateSmBaseModeUI(bs.value === 'no_base');
+ }
 }
 
 window.saveBlobToLibrary = function(blob, name, type) {

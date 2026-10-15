@@ -21,6 +21,18 @@ let avSlideIdCounter = 0;
 let previewSource = null;
 let trimPreviewSource = null;
 
+// Global tool asset tracking and deleted asset warnings
+let currentStaAssetId = null;
+let currentsctAssetId = null;
+window.smDeletedBaseAssetName = null;
+window.smDeletedOverlayNames = [];
+window.staDeletedAssetName = null;
+window.sctDeletedAssetName = null;
+window.taDeletedAssetName = null;
+window.maDeletedClipNames = [];
+window.mvDeletedClipNames = [];
+window.avDeletedSlideNames = [];
+
 // Super Mode globals
 let smActive = false;
 let smBaseAsset = null;
@@ -151,6 +163,12 @@ let smPendingLiveEffects = [];  // Effects preserved across pauses for seamless 
 
 async function getDecodedBuffer(assetId) {
  if (decodedAudioBuffers[assetId]) return decodedAudioBuffers[assetId];
+ if (assetId === 'no_base' || assetId === 'virtual-silent-base') {
+   const sr = getAudioCtx().sampleRate;
+   const buffer = getAudioCtx().createBuffer(2, sr * 3600, sr);
+   decodedAudioBuffers[assetId] = buffer;
+   return buffer;
+ }
  const asset = getAsset(assetId);
  if (!asset) return null;
  const buffer = await decodeAudio(asset.file);
@@ -160,13 +178,14 @@ async function getDecodedBuffer(assetId) {
 let playedClipIds = new Set(); // Set of clip IDs already triggered in the current review run
 
 function stopReviewPlaybackEntry(p) {
- if (p.timerId) {
- clearTimeout(p.timerId);
- p.timerId = null;
- }
- if (p.sourceNode) {
- try { p.sourceNode.stop(); } catch (_) {}
- }
+  if (p.timerId) {
+    clearTimeout(p.timerId);
+    p.timerId = null;
+  }
+  if (p.sourceNode) {
+    p.sourceNode.onended = null;
+    try { p.sourceNode.stop(); } catch (_) {}
+  }
 }
 
 /**

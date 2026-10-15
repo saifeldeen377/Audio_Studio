@@ -43,6 +43,11 @@ function initTrimVideo() {
     }
 
   btnPreview.addEventListener('click', () =>{
+    if (window.tvDeletedAssetName) {
+      const proceed = confirm(`The file "${window.tvDeletedAssetName}" was deleted from the library. Do you want to continue without it?`);
+      if (!proceed) return;
+      window.tvDeletedAssetName = null;
+    }
     const assetId = document.getElementById('tv-video-select').value;
     if (!assetId) { alert('Please select a video file from the library.'); return; }
     

@@ -105,6 +105,12 @@ function initMergeVideo() {
   }
 
   btnPreview.addEventListener('click', () =>{
+    if (window.mvDeletedClipNames && window.mvDeletedClipNames.length > 0) {
+      const names = window.mvDeletedClipNames.join(', ');
+      const proceed = confirm(`The clip(s) "${names}" were deleted from the library. Do you want to continue without them?`);
+      if (!proceed) return;
+      window.mvDeletedClipNames = [];
+    }
     if (mvClips.length === 0) { alert('Add at least one video clip first.'); return; }
 
     if (mvIsPreviewing) {

@@ -146,6 +146,89 @@ body {
   min-width: 200px;
 }
 
+/* ── ACCESSIBLE DROPDOWN MENU BUTTON ── */
+.library-actions-bar {
+  max-width: 1200px;
+  margin: 0 auto 16px;
+  display: flex;
+  align-items: center;
+}
+
+.menu-button-container {
+  position: relative;
+  display: inline-block;
+}
+
+.accessible-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 240px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-sm);
+  padding: 6px 0;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  z-index: 1100;
+  display: flex;
+  flex-direction: column;
+}
+
+.accessible-dropdown-menu[hidden] {
+  display: none !important;
+}
+
+.dropdown-menu-item {
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.9rem;
+  padding: 10px 16px;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+  display: block;
+  transition: background var(--transition), color var(--transition);
+}
+
+.dropdown-menu-item:hover,
+.dropdown-menu-item:focus {
+  background: var(--accent);
+  color: #fff;
+  outline: none;
+}
+
+.dropdown-menu-item[aria-disabled="true"],
+.dropdown-menu-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: transparent !important;
+  color: var(--text-dim) !important;
+}
+
+.batch-file-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  transition: border-color var(--transition);
+}
+
+.batch-file-item:hover {
+  border-color: var(--border-bright);
+}
+
+.batch-file-checkbox {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
 .library-items {
   max-width: 1200px;
   margin: 0 auto;

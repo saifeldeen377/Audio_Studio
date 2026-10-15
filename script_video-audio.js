@@ -80,6 +80,11 @@ function initVideoToAudio() {
 
   if (btnPreview) {
     btnPreview.addEventListener('click', async () =>{
+      if (window.vaDeletedAssetName) {
+        const proceed = confirm(`The file "${window.vaDeletedAssetName}" was deleted from the library. Do you want to continue without it?`);
+        if (!proceed) return;
+        window.vaDeletedAssetName = null;
+      }
       const assetId = document.getElementById('va-video-select').value;
       if (!assetId) { alert('Please select a video file from the library.'); return; }
 

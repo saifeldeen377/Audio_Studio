@@ -13,8 +13,8 @@ document.addEventListener('DOMContentLoaded', async () =>{
     initTrimAudio();
     initTrimVideo();
     initSuperMode();
-    initSuperTrimAudio();
     initSuperCut();
+    initSuperTrimAudio();
     updateAllLatencyDisplays();
 
     await initDatabase();

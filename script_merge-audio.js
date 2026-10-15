@@ -41,7 +41,15 @@ function initMergeAudio() {
  announce(`"${asset.name}"added to the merge list.`);
  });
 
- document.getElementById('btn-ma-play').addEventListener('click', previewMergeAudio);
+ document.getElementById('btn-ma-play').addEventListener('click', () => {
+   if (window.maDeletedClipNames && window.maDeletedClipNames.length > 0) {
+     const names = window.maDeletedClipNames.join(', ');
+     const proceed = confirm(`The clip(s) "${names}" were deleted from the library. Do you want to continue without them?`);
+     if (!proceed) return;
+     window.maDeletedClipNames = [];
+   }
+   previewMergeAudio();
+ });
  document.getElementById('btn-ma-stop').addEventListener('click', () =>{
    stopMergeAudio(true);
    const btnPreview = document.getElementById('btn-ma-play');

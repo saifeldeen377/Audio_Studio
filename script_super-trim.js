@@ -152,12 +152,16 @@ function initSuperTrimAudio() {
 
   // Handle Play/Pause
   let trimIsLoading = false;
-  let currentStaAssetId = null;
   async function togglePlay() {
-  if (!select.value) {
-  announce("Please select an audio file first.", true);
-  return;
-  }
+    if (window.staDeletedAssetName) {
+      const proceed = confirm(`The file "${window.staDeletedAssetName}" was deleted from the library. Do you want to continue without it?`);
+      if (!proceed) return;
+      window.staDeletedAssetName = null;
+    }
+    if (!select.value) {
+      announce("Please select an audio file first.", true);
+      return;
+    }
    if (trimIsLoading) {
        announce("Please wait, the audio file is currently loading...", true);
        return;
@@ -393,6 +397,11 @@ function initSuperTrimAudio() {
   const btnReplayPreview = document.getElementById('btn-sta-replay-preview');
 
   btnPreview.addEventListener('click', async () =>{
+    if (window.staDeletedAssetName) {
+      const proceed = confirm(`The file "${window.staDeletedAssetName}" was deleted from the library. Do you want to continue without it?`);
+      if (!proceed) return;
+      window.staDeletedAssetName = null;
+    }
     if (!select.value) return alert("Select a file");
     if (trimIsLoading) {
         announce("Please wait, the audio file is currently loading...", true);
