@@ -474,18 +474,26 @@ python -m http.server 3000
 <h3>More Library Options (Menu Button &amp; Accessible Dialogs)</h3>
 <p>Directly above the files list is the accessible <strong>"More library options"</strong> menu button (<code>aria-haspopup="menu"</code>). Pressing <code>Enter</code>, <code>Space</code>, or <code>&darr;</code> opens a standard WAI-ARIA dropdown menu:</p>
 <ul>
-<li><strong>Reset library...</strong>: Opens an accessible confirmation dialog with a dedicated checkbox:
+<li><strong>Reset library</strong>: Opens an accessible confirmation dialog with a dedicated checkbox:
   <ul>
     <li>By default (checkbox unchecked), only your uploaded files are deleted, preserving all built-in procedural sounds (<code>Ambient Beep</code>, <code>Laser Sweep</code>, etc.).</li>
     <li>Checking <strong>"Delete all files including default sounds"</strong> completely wipes the library.</li>
   </ul>
 </li>
-<li><strong>Delete files by selection...</strong>: Opens a dedicated modal dialog focused solely on batch deletion:
+<li><strong>Delete files by selection</strong>: Opens a dedicated modal dialog focused solely on batch deletion:
   <ul>
     <li>Contains a clean, accessible list of file checkboxes without individual media buttons. Default sounds are clearly labeled with <code>(Default Sound)</code>.</li>
     <li>Includes a <strong>"Selection options"</strong> menu button with: <strong>Select all</strong>, <strong>Deselect all</strong>, <strong>Invert selection</strong>, and <strong>Select only user files</strong>.</li>
     <li>A live badge announces the number of selected files (<code>aria-live="polite"</code>).</li>
     <li>Clicking <strong>"Delete Selected"</strong> confirms and permanently deletes only the selected files.</li>
+  </ul>
+</li>
+<li><strong>Download files by selection</strong>: Opens a dedicated batch export modal dialog mirroring the batch selection experience:
+  <ul>
+    <li>Select any combination of files using individual checkboxes or the <strong>"Selection options"</strong> menu (<strong>Select all</strong>, <strong>Deselect all</strong>, <strong>Invert selection</strong>, and <strong>Select only user files</strong>).</li>
+    <li>Seamless keyboard navigation allows rapid browsing through checkboxes using <kbd>&darr;</kbd> and <kbd>&uarr;</kbd>.</li>
+    <li>Shows real-time badge count (<code>aria-live="polite"</code>) and dynamically updates the confirm button (<code>Download Selected (N)</code>).</li>
+    <li>Clicking <strong>"Download Selected"</strong> initiates staggered downloads (250ms interval) to ensure browser download managers process every selected file reliably without throttling.</li>
   </ul>
 </li>
 <li><strong>Restore default files</strong>: Intelligently appears in the menu only if one or more default procedural sounds have been removed. Clicking it regenerates and restores only the missing default sounds without duplicating any existing files.</li>

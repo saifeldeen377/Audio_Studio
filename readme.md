@@ -95,14 +95,19 @@ Each file in your library has three action buttons:
 
 ### More Library Options (Menu Button & Accessible Dialogs)
 Directly above the files list is the accessible **"More library options"** menu button (`aria-haspopup="menu"`). Pressing `Enter`, `Space`, or `↓` opens a standard WAI-ARIA dropdown menu:
-- **Reset library...**: Opens an accessible confirmation dialog with a dedicated checkbox:
+- **Reset library**: Opens an accessible confirmation dialog with a dedicated checkbox:
   - By default (checkbox unchecked), only your uploaded files are deleted, preserving all built-in procedural sounds (`Ambient Beep`, `Laser Sweep`, etc.).
   - Checking **"Delete all files including default sounds"** completely wipes the library.
-- **Delete files by selection...**: Opens a dedicated modal dialog focused solely on batch deletion:
+- **Delete files by selection**: Opens a dedicated modal dialog focused solely on batch deletion:
   - Contains a clean, accessible list of file checkboxes without individual media buttons. Default sounds are clearly labeled with `(Default Sound)`.
   - Includes a **"Selection options"** menu button with: **Select all**, **Deselect all**, **Invert selection**, and **Select only user files**.
   - A live badge announces the number of selected files (`aria-live="polite"`).
   - Clicking **"Delete Selected"** confirms and permanently deletes only the selected files.
+- **Download files by selection**: Opens a dedicated batch export modal dialog mirroring the batch selection experience:
+  - Select any combination of files using individual checkboxes or the **"Selection options"** menu (**Select all**, **Deselect all**, **Invert selection**, and **Select only user files**).
+  - Seamless keyboard navigation allows rapid browsing through checkboxes using `Arrow Down` and `Arrow Up`.
+  - Shows real-time badge count (`aria-live="polite"`) and dynamically updates the confirm button (`Download Selected (N)`).
+  - Clicking **"Download Selected"** initiates staggered downloads (250ms interval) to ensure browser download managers process every selected file reliably without throttling.
 - **Restore default files**: Intelligently appears in the menu only if one or more default procedural sounds have been removed. Clicking it regenerates and restores only the missing default sounds without duplicating any existing files.
 - **Dialog Focus Isolation**: When any confirmation dialog (such as Reset, Selection Deletion, or Single Removal) is opened, the main interface and sidebar are safely isolated (`aria-hidden="true"`). Pressing `Tab` cycles circularly strictly within the dialog controls, preventing screen readers (such as NVDA and JAWS) from getting lost in browser toolbars or background content.
 - **Real-Time Library Synchronization & Safety Prompts**: When a file is removed from the library, all tools instantly remove that file from their active selectors. If an audio file assigned as base audio or overlay in Super Merger is deleted from the library while Super Merger is open, pressing "Go Now"or "Play"automatically surfaces a clear safety prompt asking if you want to proceed without it. If you press "Cancel", the studio provides clear guidance: *"Okay, choose another file to continue with, or press Go Now again to start without it."*

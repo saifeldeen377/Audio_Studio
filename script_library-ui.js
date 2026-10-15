@@ -4,6 +4,7 @@
 
 const activeLibraryAudios = {};
 const batchSelectedAssetIds = new Set();
+const batchDownloadSelectedAssetIds = new Set();
 let activeOpenDropdownMenu = null;
 
 function setupDropdownMenu(buttonId, menuId) {
@@ -105,6 +106,7 @@ window.updateLibraryMenuItemsVisibility = function() {
   const btn = document.getElementById('btn-lib-more-options');
   const itemReset = document.getElementById('menu-item-reset');
   const itemBatch = document.getElementById('menu-item-batch-delete');
+  const itemBatchDownload = document.getElementById('menu-item-batch-download');
   const itemRestore = document.getElementById('menu-item-restore-defaults');
 
   const isEmpty = assetLibrary.length === 0;
@@ -117,14 +119,16 @@ window.updateLibraryMenuItemsVisibility = function() {
   }
 
   if (isEmpty) {
-    // When library is empty, hide reset & batch delete, show restore defaults
+    // When library is empty, hide reset, batch delete & batch download, show restore defaults
     if (itemReset) itemReset.style.display = 'none';
     if (itemBatch) itemBatch.style.display = 'none';
+    if (itemBatchDownload) itemBatchDownload.style.display = 'none';
     if (itemRestore) itemRestore.style.display = 'block';
   } else {
-    // When files exist, show reset & batch delete
+    // When files exist, show reset, batch delete & batch download
     if (itemReset) itemReset.style.display = 'block';
     if (itemBatch) itemBatch.style.display = 'block';
+    if (itemBatchDownload) itemBatchDownload.style.display = 'block';
     // Restore defaults is only visible if any default sounds are missing
     if (itemRestore) itemRestore.style.display = hasMissing ? 'block' : 'none';
   }
@@ -352,6 +356,169 @@ function executeBatchSelectionOption(action) {
   }
 }
 
+// ── BATCH DOWNLOAD FUNCTIONS ──
+function openBatchDownloadModal() {
+  const modal = document.getElementById('modal-lib-batch-download');
+  if (!modal) return;
+
+  batchDownloadSelectedAssetIds.clear();
+  renderBatchDownloadFileList();
+  updateBatchDownloadButtonAndBadge();
+
+  modal.hidden = false;
+  modal.style.display = 'flex';
+  setAppBackgroundInert(true, modal);
+
+  const firstChk = modal.querySelector('.batch-download-file-checkbox');
+  const closeBtn = document.getElementById('btn-close-batch-download-modal');
+  if (firstChk) firstChk.focus();
+  else if (closeBtn) closeBtn.focus();
+}
+
+function closeBatchDownloadModal() {
+  const modal = document.getElementById('modal-lib-batch-download');
+  if (modal) {
+    modal.hidden = true;
+    modal.style.display = 'none';
+  }
+  setAppBackgroundInert(false);
+  batchDownloadSelectedAssetIds.clear();
+  const btn = document.getElementById('btn-lib-more-options');
+  if (btn) btn.focus();
+}
+
+function renderBatchDownloadFileList() {
+  const listContainer = document.getElementById('batch-download-file-list');
+  if (!listContainer) return;
+  listContainer.innerHTML = '';
+
+  if (assetLibrary.length === 0) {
+    listContainer.innerHTML = '<p class="empty-hint" style="text-align: center; padding: 20px;">No files available in the library.</p>';
+    return;
+  }
+
+  assetLibrary.forEach(asset => {
+    const isDefault = asset.id.startsWith('asset-pre-');
+    const isChecked = batchDownloadSelectedAssetIds.has(asset.id);
+
+    const item = document.createElement('div');
+    item.className = 'batch-file-item';
+    item.setAttribute('role', 'listitem');
+
+    item.innerHTML = `
+      <label style="display: flex; align-items: center; gap: 12px; cursor: pointer; width: 100%;">
+        <input type="checkbox" class="batch-download-file-checkbox" data-asset-id="${asset.id}" ${isChecked ? 'checked' : ''} aria-label="Select ${escapeHTML(asset.name)} for download">
+        <span style="font-weight: 600; color: var(--text);">${escapeHTML(asset.name)}</span>
+        <span style="font-size: 0.8rem; color: var(--text-dim); text-transform: uppercase;">(${asset.type})</span>
+        ${isDefault ? '<span style="color: var(--accent); font-size: 0.8rem; font-weight: 600; margin-left: 6px;">(Default Sound)</span>' : ''}
+      </label>
+    `;
+
+    listContainer.appendChild(item);
+  });
+
+  const checkboxes = Array.from(listContainer.querySelectorAll('.batch-download-file-checkbox'));
+  checkboxes.forEach((chk, idx) => {
+    chk.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const next = checkboxes[(idx + 1) % checkboxes.length];
+        if (next) next.focus();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        const prev = checkboxes[(idx - 1 + checkboxes.length) % checkboxes.length];
+        if (prev) prev.focus();
+      }
+    });
+  });
+}
+
+function updateBatchDownloadButtonAndBadge() {
+  const badge = document.getElementById('batch-download-sel-count-badge');
+  const confirmBtn = document.getElementById('btn-batch-download-confirm');
+  const count = batchDownloadSelectedAssetIds.size;
+
+  if (badge) {
+    badge.textContent = `${count} ${count === 1 ? 'file' : 'files'} selected`;
+  }
+  if (confirmBtn) {
+    confirmBtn.textContent = `Download Selected (${count})`;
+    confirmBtn.disabled = count === 0;
+  }
+}
+
+function executeBatchDownloadSelectionOption(action) {
+  const checkboxes = document.querySelectorAll('.batch-download-file-checkbox');
+
+  if (action === 'select_all') {
+    assetLibrary.forEach(a => batchDownloadSelectedAssetIds.add(a.id));
+    checkboxes.forEach(chk => { chk.checked = true; });
+    updateBatchDownloadButtonAndBadge();
+    announce(`All ${batchDownloadSelectedAssetIds.size} files selected for download.`);
+  } else if (action === 'deselect_all') {
+    batchDownloadSelectedAssetIds.clear();
+    checkboxes.forEach(chk => { chk.checked = false; });
+    updateBatchDownloadButtonAndBadge();
+    announce('All files deselected.');
+  } else if (action === 'invert') {
+    assetLibrary.forEach(a => {
+      if (batchDownloadSelectedAssetIds.has(a.id)) {
+        batchDownloadSelectedAssetIds.delete(a.id);
+      } else {
+        batchDownloadSelectedAssetIds.add(a.id);
+      }
+    });
+    checkboxes.forEach(chk => {
+      const id = chk.getAttribute('data-asset-id');
+      chk.checked = batchDownloadSelectedAssetIds.has(id);
+    });
+    updateBatchDownloadButtonAndBadge();
+    announce(`Selection inverted: ${batchDownloadSelectedAssetIds.size} files selected.`);
+  } else if (action === 'user_only') {
+    batchDownloadSelectedAssetIds.clear();
+    assetLibrary.forEach(a => {
+      if (!a.id.startsWith('asset-pre-')) {
+        batchDownloadSelectedAssetIds.add(a.id);
+      }
+    });
+    checkboxes.forEach(chk => {
+      const id = chk.getAttribute('data-asset-id');
+      chk.checked = batchDownloadSelectedAssetIds.has(id);
+    });
+    updateBatchDownloadButtonAndBadge();
+    announce(`${batchDownloadSelectedAssetIds.size} user file(s) selected for download.`);
+  }
+
+  const menu = document.getElementById('batch-download-sel-menu');
+  if (menu) menu.hidden = true;
+  const btn = document.getElementById('btn-batch-download-sel-menu');
+  if (btn) {
+    btn.setAttribute('aria-expanded', 'false');
+    btn.focus();
+  }
+}
+
+function handleBatchDownloadConfirm() {
+  const count = batchDownloadSelectedAssetIds.size;
+  if (count === 0) {
+    alert('No files selected. Please select at least one file to download.');
+    return;
+  }
+
+  const idsToDownload = Array.from(batchDownloadSelectedAssetIds);
+  closeBatchDownloadModal();
+  announce(`Downloading ${count} selected file(s)...`);
+
+  // Stagger downloads by 250ms so browser manages multiple downloads cleanly
+  idsToDownload.forEach((id, index) => {
+    setTimeout(() => {
+      if (typeof window.downloadAsset === 'function') {
+        window.downloadAsset(id);
+      }
+    }, index * 250);
+  });
+}
+
 function getUniqueAssetName(requestedName) {
   let name = (requestedName || '').trim();
   if (!name) name = "Untitled";
@@ -438,8 +605,10 @@ function initLibrary() {
  // ── MORE LIBRARY OPTIONS & BATCH SELECTION MENUS ──
  setupDropdownMenu('btn-lib-more-options', 'lib-more-menu');
  setupDropdownMenu('btn-batch-sel-menu', 'batch-sel-menu');
+ setupDropdownMenu('btn-batch-download-sel-menu', 'batch-download-sel-menu');
  setupFocusTrap(document.getElementById('modal-lib-reset'));
  setupFocusTrap(document.getElementById('modal-lib-batch-delete'));
+ setupFocusTrap(document.getElementById('modal-lib-batch-download'));
 
  const itemReset = document.getElementById('menu-item-reset');
  if (itemReset) {
@@ -460,6 +629,17 @@ function initLibrary() {
  const btn = document.getElementById('btn-lib-more-options');
  if (btn) btn.setAttribute('aria-expanded', 'false');
  openBatchDeleteModal();
+ });
+ }
+
+ const itemBatchDownload = document.getElementById('menu-item-batch-download');
+ if (itemBatchDownload) {
+ itemBatchDownload.addEventListener('click', () => {
+ const menu = document.getElementById('lib-more-menu');
+ if (menu) menu.hidden = true;
+ const btn = document.getElementById('btn-lib-more-options');
+ if (btn) btn.setAttribute('aria-expanded', 'false');
+ openBatchDownloadModal();
  });
  }
 
@@ -522,6 +702,39 @@ function initLibrary() {
  });
  }
 
+ // ── BATCH DOWNLOAD MODAL BUTTONS ──
+ const btnCloseBatchDownload = document.getElementById('btn-close-batch-download-modal');
+ const btnCancelBatchDownload = document.getElementById('btn-batch-download-cancel');
+ const btnConfirmBatchDownload = document.getElementById('btn-batch-download-confirm');
+
+ if (btnCloseBatchDownload) btnCloseBatchDownload.addEventListener('click', closeBatchDownloadModal);
+ if (btnCancelBatchDownload) btnCancelBatchDownload.addEventListener('click', closeBatchDownloadModal);
+ if (btnConfirmBatchDownload) btnConfirmBatchDownload.addEventListener('click', handleBatchDownloadConfirm);
+
+ // Batch download selection menu options
+ const itemDownloadSelAll = document.getElementById('menu-item-download-sel-all');
+ const itemDownloadDeselAll = document.getElementById('menu-item-download-desel-all');
+ const itemDownloadInvertSel = document.getElementById('menu-item-download-invert-sel');
+ const itemDownloadSelUserOnly = document.getElementById('menu-item-download-sel-user-only');
+
+ if (itemDownloadSelAll) itemDownloadSelAll.addEventListener('click', () => executeBatchDownloadSelectionOption('select_all'));
+ if (itemDownloadDeselAll) itemDownloadDeselAll.addEventListener('click', () => executeBatchDownloadSelectionOption('deselect_all'));
+ if (itemDownloadInvertSel) itemDownloadInvertSel.addEventListener('click', () => executeBatchDownloadSelectionOption('invert'));
+ if (itemDownloadSelUserOnly) itemDownloadSelUserOnly.addEventListener('click', () => executeBatchDownloadSelectionOption('user_only'));
+
+ // Batch download file list checkboxes change
+ const batchDownloadList = document.getElementById('batch-download-file-list');
+ if (batchDownloadList) {
+ batchDownloadList.addEventListener('change', (e) => {
+ if (e.target && e.target.classList.contains('batch-download-file-checkbox')) {
+ const id = e.target.getAttribute('data-asset-id');
+ if (e.target.checked) batchDownloadSelectedAssetIds.add(id);
+ else batchDownloadSelectedAssetIds.delete(id);
+ updateBatchDownloadButtonAndBadge();
+ }
+ });
+ }
+
  // Global Escape key closes any active modal
  document.addEventListener('keydown', (e) => {
  if (e.key === 'Escape') {
@@ -533,6 +746,11 @@ function initLibrary() {
  const batchModal = document.getElementById('modal-lib-batch-delete');
  if (batchModal && !batchModal.hidden) {
  closeBatchDeleteModal();
+ return;
+ }
+ const batchDownloadModal = document.getElementById('modal-lib-batch-download');
+ if (batchDownloadModal && !batchDownloadModal.hidden) {
+ closeBatchDownloadModal();
  return;
  }
  }

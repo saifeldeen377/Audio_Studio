@@ -67,6 +67,7 @@ function setAppBackgroundInert(isInert, activeModal = null) {
     document.getElementById('super-cut-overlay'),
     document.getElementById('modal-lib-reset'),
     document.getElementById('modal-lib-batch-delete'),
+    document.getElementById('modal-lib-batch-download'),
     document.getElementById('sm-calibration-dialog'),
     document.getElementById('sm-manage-overlays-dialog'),
     document.getElementById('sm-manage-effects-dialog'),
