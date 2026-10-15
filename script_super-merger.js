@@ -490,7 +490,7 @@ function initSuperMode() {
  const overlay = smOverlays.find(o => matchesShortcutKey(o.key, e));
  if (overlay) {
  e.preventDefault();
- const isDelete = (isAlt && isShift) || (isCtrl && isShift) || (isAlt && !isCtrl);
+ const isDelete = isAlt || (isCtrl && isShift);
  if (isDelete) {
  cancelActiveOverlay(overlay);
  } else if (isShift && !isCtrl && !isAlt) {
@@ -504,7 +504,7 @@ function initSuperMode() {
  // Effect shortcuts
  const effect = smEffects.find(ef => matchesShortcutKey(ef.key, e));
  if (effect) {
-  const isDelete = (isAlt && isShift) || (isCtrl && isShift) || (isAlt && !isCtrl);
+  const isDelete = isAlt || (isCtrl && isShift);
   if (isDelete) {
    e.preventDefault();
    clearEffectRecordings(effect);
@@ -1617,9 +1617,9 @@ function getSmConnectedSegments(targetEntry, effectType, effectId, overlapBehavi
     added = false;
     for (const r of smRecordedEffects) {
       if (cluster.has(r) || !isMatch(r)) continue;
-      const rEnd = r.timelineEnd !== null ? r.timelineEnd : Infinity;
+      const rEnd = r.timelineEnd !== null ? r.timelineEnd : Math.max(r.timelineStart + 0.02, smVirtualTime);
       for (const item of cluster) {
-        const itemEnd = item.timelineEnd !== null ? item.timelineEnd : Infinity;
+        const itemEnd = item.timelineEnd !== null ? item.timelineEnd : Math.max(item.timelineStart + 0.02, smVirtualTime);
         const touchesOrOverlaps = 
           (r.timelineStart <= itemEnd + 0.08 && rEnd >= item.timelineStart - 0.08);
         if (touchesOrOverlaps) {
@@ -1711,8 +1711,8 @@ function finalizeEffectRecording(recordEntry, effect) {
       const O_end = r.timelineEnd !== null ? r.timelineEnd : Infinity;
       const originalEnd = r.timelineEnd;
 
-      if (O_end <= S || (O_start >= E && Math.abs(O_start - E) > 0.05)) {
-        // No overlap and not touching end
+      if (O_end <= S || O_start >= E) {
+        // No overlap
       } else if (O_start >= S && O_end <= E) {
         // Fully swallowed
         recordEntry.overwrites.push({
@@ -1738,7 +1738,7 @@ function finalizeEffectRecording(recordEntry, effect) {
           createdAt: r.createdAt || Date.now()
         });
       } else if (O_start < S && O_end > S) {
-        // Overlaps left -> truncate right
+        // Overlaps left -> truncate right to S
         recordEntry.overwrites.push({
           action: 'truncated_right',
           targetId: r.id,
@@ -1746,26 +1746,15 @@ function finalizeEffectRecording(recordEntry, effect) {
           newEnd: S
         });
         r.timelineEnd = S;
-      } else if ((O_start < E && O_end > E) || Math.abs(O_start - E) <= 0.05) {
-        // Overlaps right or touches right at the stop point E
-        if (clearBehavior === 'unified') {
-          // In Unified mode: the user stopped this effect at E!
-          // The touching downstream piece is swallowed so the effect cleanly stops at E.
-          recordEntry.overwrites.push({
-            action: 'swallowed',
-            savedEntry: JSON.parse(JSON.stringify(r))
-          });
-          smRecordedEffects.splice(i, 1);
-        } else {
-          // Sequential mode: keep remainder starting at E, but track overwrite for undo
-          recordEntry.overwrites.push({
-            action: 'truncated_left',
-            targetId: r.id,
-            originalStart: O_start,
-            newStart: E
-          });
-          r.timelineStart = E;
-        }
+      } else if (O_start < E && O_end > E) {
+        // Overlaps right -> truncate left so remainder starts at E
+        recordEntry.overwrites.push({
+          action: 'truncated_left',
+          targetId: r.id,
+          originalStart: O_start,
+          newStart: E
+        });
+        r.timelineStart = E;
       }
     }
   }
@@ -1855,8 +1844,8 @@ function toggleSmEffect(effect) {
 
     if (clearBehavior === 'unified') {
       activeRecs.forEach(r => {
-        const connected = getSmConnectedSegments(r, effect.effectType, effect.id, overlapBehavior);
         r.timelineEnd = Math.max(r.timelineStart + 0.02, punchOutTime);
+        const connected = getSmConnectedSegments(r, effect.effectType, effect.id, overlapBehavior);
         finalizeEffectRecording(r, effect);
         // In Unified mode: remove any connected downstream segments starting at or after punchOutTime
         connected.forEach(c => {
@@ -1977,7 +1966,8 @@ function toggleSmEffect(effect) {
       target: effect.target,
       params: effect.params || {},
       createdAt: Date.now(),
-      overwrites: []
+      overwrites: [],
+      isGapEffect: !!smSoftPaused
     });
 
     rebuildEffectRouting();
@@ -3051,17 +3041,18 @@ function smResumeBase(isPunchIn = false) {
           // Shift smRecordedEffects across the gap so effects stay in sync with audio
           const newSplitEffects = [];
           smRecordedEffects.forEach(eff => {
-              if (eff.timelineStart > smSoftPauseStartVirtual + 0.001) {
+              if (!eff.isGapEffect && eff.timelineStart > smSoftPauseStartVirtual + 0.001) {
                   eff.timelineStart += gapDuration;
                   if (eff.timelineEnd !== null) eff.timelineEnd += gapDuration;
-              } else if (eff.timelineStart <= smSoftPauseStartVirtual && eff.timelineEnd !== null && eff.timelineEnd > smSoftPauseStartVirtual) {
+              } else if (!eff.isGapEffect && eff.timelineStart <= smSoftPauseStartVirtual && eff.timelineEnd !== null && eff.timelineEnd > smSoftPauseStartVirtual) {
                   const oldEnd = eff.timelineEnd;
                   eff.timelineEnd = smSoftPauseStartVirtual;
                   newSplitEffects.push({
                       ...eff,
                       id: `smfx-${++smRecordedEffectIdCounter}`,
                       timelineStart: smVirtualTime,
-                      timelineEnd: oldEnd + gapDuration
+                      timelineEnd: oldEnd + gapDuration,
+                      isGapEffect: false
                   });
               }
           });
@@ -3383,10 +3374,24 @@ function handleCancelGap() {
   // Remove any effects that were recorded inside the canceled gap
   for (let i = smRecordedEffects.length - 1; i >= 0; i--) {
     const e = smRecordedEffects[i];
-    if (e.timelineStart >= gapStart - 0.001 && e.timelineStart < gapEnd + 0.001) {
+    if (e.isGapEffect || (e.timelineStart >= gapStart - 0.001 && e.timelineStart < gapEnd + 0.001)) {
       smRecordedEffects.splice(i, 1);
     }
   }
+
+  // Deactivate any live effect that was started inside the canceled gap
+  Object.keys(activeSmEffects).forEach(id => {
+    const active = activeSmEffects[id];
+    if (active && !active.isReview && active.recordEntryId) {
+      const rec = smRecordedEffects.find(r => r.id === active.recordEntryId);
+      if (!rec || rec.isGapEffect) {
+        if (active.baseNodes) disposeEffectNodes(active.baseNodes);
+        if (active.overlayNodes) disposeEffectNodes(active.overlayNodes);
+        delete activeSmEffects[id];
+      }
+    }
+  });
+  rebuildEffectRouting();
 
   if (isManualSoftPause) {
     // Manual soft pause: segments haven't been shifted yet.
@@ -3877,7 +3882,8 @@ function toggleOverlayPauseResume(overlay) {
  cropStart: active.pausedAtOffset,
  cropEnd: null,
  volume: (overlay.volume !== undefined) ? overlay.volume : 1.0,
- behavior: overlay.behavior || 'overlap'
+ behavior: overlay.behavior || 'overlap',
+ isGapClip: !!smSoftPaused
  };
 
  smRecordedClips.push(newClip);
@@ -4007,7 +4013,8 @@ function resumeSmAllOverlays() {
  Object.values(activeOverlayAudios).forEach(active =>{
  if (active.state === 'paused') {
  if (active.userPaused) {
- delete activeOverlayAudios[active.clipEntry.id];
+ // Keep user-paused overlay in paused state; preserve it for Shift+Key resume
+ return;
  } else {
  active.state = 'playing';
  const src = ctx.createBufferSource();
@@ -4117,15 +4124,12 @@ function deleteClip(clip) {
 }
 
 function handleDeletePrevious() {
- const activeClipIds = new Set(Object.values(activeOverlayAudios).map(a => a.clipEntry.id));
- const activeEffectIds = new Set(Object.keys(activeSmEffects).filter(k => activeSmEffects[k].state === 'active' && activeSmEffects[k].recordEntryId).map(k => activeSmEffects[k].recordEntryId));
- 
  const allItems = [];
  smRecordedClips.forEach(c => {
-  if (!activeClipIds.has(c.id) && !c.isGapClip) allItems.push({ type: 'clip', data: c, time: c.timelineStart });
+  allItems.push({ type: 'clip', data: c, time: c.timelineStart });
  });
  smRecordedEffects.forEach(e => {
-  if (!activeEffectIds.has(e.id)) allItems.push({ type: 'effect', data: e, time: e.timelineStart });
+  allItems.push({ type: 'effect', data: e, time: e.timelineStart });
  });
 
  let prevItem = null;
@@ -4143,20 +4147,17 @@ function handleDeletePrevious() {
 }
 
 function handleDeleteNext() {
- const activeClipIds = new Set(Object.values(activeOverlayAudios).map(a => a.clipEntry.id));
- const activeEffectIds = new Set(Object.keys(activeSmEffects).filter(k => activeSmEffects[k].state === 'active' && activeSmEffects[k].recordEntryId).map(k => activeSmEffects[k].recordEntryId));
- 
  const allItems = [];
  smRecordedClips.forEach(c => {
-  if (!activeClipIds.has(c.id) && !c.isGapClip) allItems.push({ type: 'clip', data: c, time: c.timelineStart });
+  allItems.push({ type: 'clip', data: c, time: c.timelineStart });
  });
  smRecordedEffects.forEach(e => {
-  if (!activeEffectIds.has(e.id)) allItems.push({ type: 'effect', data: e, time: e.timelineStart });
+  allItems.push({ type: 'effect', data: e, time: e.timelineStart });
  });
 
  let nextItem = null;
  for (let item of allItems) {
-  if (item.time > smVirtualTime) {
+  if (item.time > smVirtualTime + 0.005) {
    if (!nextItem || item.time < nextItem.time) nextItem = item;
   }
  }

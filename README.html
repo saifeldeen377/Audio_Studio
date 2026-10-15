@@ -555,12 +555,12 @@ python -m http.server 3000
 <tr><td><kbd>Ctrl </kbd>+<kbd>Space </kbd></td><td>Soft-Pause /<strong>Punch-In </strong>. If you use this during replay, it deletes any future base segments and starts recording a new one. Can also be used to create silent gaps in the base audio where the timeline continues ticking.</td></tr>
 <tr><td><kbd>Ctrl </kbd>+<kbd>Shift </kbd>+<kbd>Space </kbd></td><td><strong>Cancel Gap.</strong> If in a soft-pause mid-track: rewinds timeline to where the gap started and resumes the base, as if the gap never happened. Any downstream effects and overlays shift back in sync. Behavior depends on the <strong>Cancel Gap</strong> setting.</td></tr>
 <tr><td><kbd>←</kbd>/<kbd>→</kbd></td><td>Seek timeline back or forward by 5 seconds.</td></tr>
-<tr><td><kbd>Ctrl </kbd>+<kbd>←</kbd>/<kbd>→</kbd></td><td>Delete the previous/next recorded overlay clip and jump to its position on the timeline. (Does not affect currently active live clips)</td></tr>
+<tr><td><kbd>Ctrl </kbd>+<kbd>←</kbd>/<kbd>→</kbd></td><td>Delete the previous/next recorded overlay clip or effect (including during gaps) and jump to its position on the timeline.</td></tr>
 <tr><td><kbd>[Your Overlay Key] </kbd></td><td>Play overlay from beginning (restarts if already playing)</td></tr>
 <tr><td><kbd>Shift </kbd>+<kbd>[Your Overlay Key] </kbd></td><td>Pause / Resume that overlay from current position in both listening and the final track </td></tr>
-<tr><td><kbd>Alt </kbd>+<kbd>Shift </kbd>+<kbd>[Your Overlay Key] </kbd></td><td>Stop, delete, and erase the currently playing overlay clip from the log and timeline </td></tr>
+<tr><td><kbd>Alt </kbd>+<kbd>[Your Overlay Key] </kbd></td><td>Stop, delete, and erase the currently playing overlay clip from the log and timeline </td></tr>
 <tr><td><kbd>[Your Effect Key] </kbd></td><td>Toggle audio effect ON / OFF during live recording. During review/replay playback, pressing the key punches out (stops) the currently playing effect segment at the current timestamp.</td></tr>
-<tr><td><kbd>Alt </kbd>+<kbd>Shift </kbd>+<kbd>[Your Effect Key] </kbd></td><td>Stop, delete, and erase recorded effect segments from the timeline (removes connected segments or the topmost layered pass based on your clear behavior setting).</td></tr>
+<tr><td><kbd>Alt </kbd>+<kbd>[Your Effect Key] </kbd></td><td>Stop, delete, and erase recorded effect segments from the timeline (removes connected segments or the topmost layered pass based on your clear behavior setting).</td></tr>
 <tr><td><kbd>Escape </kbd></td><td>During Setup: Exits Super Merger. During Live Session: Returns to Setup view safely. </td></tr>
 </tbody>
 </table>
@@ -651,8 +651,8 @@ python -m http.server 3000
 <h4 id="sm-effect-clear-behavior-section">Overwritten &amp; Connected Effects Stop / Deletion</h4>
 <p>Configure how the timeline handles stop and delete actions when an effect has been recorded in overlapping passes or contiguous segments:</p>
 <ul>
-<li><strong>Unified (Default):</strong> Contiguous or touching segments of the same effect are treated as a single unified effect. When you stop live recording, the effect ends cleanly (any touching downstream remnants are swallowed so the effect never restarts unexpectedly later). Deleting via <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>[Your Key]</kbd> or timeline actions deletes the entire connected segment cluster at once.</li>
-<li><strong>Sequential / Layered (Preserves History):</strong> Each recording pass is tracked as an independent layer with an undo history (while strictly ensuring zero double-processing during playback and export). Deleting via <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>[Your Key]</kbd> removes only the most recent recording pass and automatically restores the underlying prior pass to its original boundaries. A second delete will then remove the earlier pass.</li>
+<li><strong>Unified (Default):</strong> Contiguous or touching segments of the same effect are treated as a single unified effect. When you stop live recording, the effect ends cleanly (any touching downstream remnants are swallowed so the effect never restarts unexpectedly later). Deleting via <kbd>Alt</kbd>+<kbd>[Your Key]</kbd> or timeline actions deletes the entire connected segment cluster at once.</li>
+<li><strong>Sequential / Layered (Preserves History):</strong> Each recording pass is tracked as an independent layer with an undo history (while strictly ensuring zero double-processing during playback and export). Deleting via <kbd>Alt</kbd>+<kbd>[Your Key]</kbd> removes only the most recent recording pass and automatically restores the underlying prior pass to its original boundaries. A second delete will then remove the earlier pass.</li>
 </ul>
 
 <h4 id="sm-advanced-panel-section">Collapsible Additional Settings Panel</h4>

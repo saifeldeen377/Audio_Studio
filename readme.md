@@ -152,12 +152,12 @@ If you made a mistake or want to change your assigned triggers, use the **"Manag
 | `Ctrl` + `Space` | Soft-Pause / **Punch-In**. If you use this during replay, it deletes any future base segments and starts recording a new one. Can also be used to create silent gaps in the base audio where the timeline continues ticking. |
 | `Ctrl` + `Shift` + `Space` | **Cancel Gap.** If in a soft-pause mid-track: rewinds timeline to where the gap started and resumes the base, as if the gap never happened. Any downstream effects and overlays shift back in sync. Behavior depends on the **Cancel Gap** setting. |
 | `←` / `→` | Seek timeline back or forward by 5 seconds. |
-| `Ctrl` + `←` / `→` | Delete the previous/next recorded overlay clip and jump to its position on the timeline. (Does not affect currently active live clips) |
+| `Ctrl` + `←` / `→` | Delete the previous/next recorded overlay clip or effect (including during gaps) and jump to its position on the timeline. |
 | `[Your Overlay Key]` | Play overlay from beginning (restarts if already playing) |
 | `Shift` + `[Your Overlay Key]` | Pause / Resume that overlay from current position in both listening and the final track |
-| `Alt` + `Shift` + `[Your Overlay Key]` | Stop, delete, and erase the currently playing overlay clip from the log and timeline |
+| `Alt` + `[Your Overlay Key]` | Stop, delete, and erase the currently playing overlay clip from the log and timeline |
 | `[Your Effect Key]` | Toggle audio effect ON / OFF during live recording. During review/replay playback, pressing the key punches out (stops) the currently playing effect segment at the current timestamp. |
-| `Alt` + `Shift` + `[Your Effect Key]` | Stop, delete, and erase recorded effect segments from the timeline (removes connected segments or the topmost layered pass based on your clear behavior setting). |
+| `Alt` + `[Your Effect Key]` | Stop, delete, and erase recorded effect segments from the timeline (removes connected segments or the topmost layered pass based on your clear behavior setting). |
 | `Escape` | During Setup: Exits Super Merger. During Live Session: Returns to Setup view safely. |
 
 > ** Note:** Overlays are only **recorded** when the timeline is actively running. This includes when the base audio is playing naturally, when overdubbing during a replay, and during a **Soft-Pause** gap. Triggering an overlay while the timeline is fully paused lets you audition the sound without it appearing in the final mix.
@@ -221,8 +221,8 @@ Configure how the mixer handles triggering multiple effects of the same type (su
 
 #### Overwritten & Connected Effects Stop / Deletion
 Configure how the timeline handles stop and delete actions when an effect has been recorded in overlapping passes or contiguous segments:
-- **Unified (Default):** Contiguous or touching segments of the same effect are treated as a single unified effect. When you stop live recording, the effect ends cleanly (any touching downstream remnants are swallowed so the effect never restarts unexpectedly later). Deleting via `Alt` + `Shift` + `[Your Key]` or timeline actions deletes the entire connected segment cluster at once.
-- **Sequential / Layered (Preserves History):** Each recording pass is tracked as an independent layer with an undo history (while strictly ensuring zero double-processing during playback and export). Deleting via `Alt` + `Shift` + `[Your Key]` removes only the most recent recording pass and automatically restores the underlying prior pass to its original boundaries. A second delete will then remove the earlier pass.
+- **Unified (Default):** Contiguous or touching segments of the same effect are treated as a single unified effect. When you stop live recording, the effect ends cleanly (any touching downstream remnants are swallowed so the effect never restarts unexpectedly later). Deleting via `Alt` + `[Your Key]` or timeline actions deletes the entire connected segment cluster at once.
+- **Sequential / Layered (Preserves History):** Each recording pass is tracked as an independent layer with an undo history (while strictly ensuring zero double-processing during playback and export). Deleting via `Alt` + `[Your Key]` removes only the most recent recording pass and automatically restores the underlying prior pass to its original boundaries. A second delete will then remove the earlier pass.
 
 #### Collapsible Additional Settings Panel
 All secondary mixer behaviors in Step 1 are tucked inside an accessible disclosure panel toggled with the **"Additional Settings & Behaviors"** button. Built using standard button disclosure semantics (`aria-expanded` and `aria-controls`), it keeps the setup screen streamlined while ensuring screen readers (NVDA, JAWS) announce clear collapsed/expanded status without intrusive list announcements ("1 of 1").
