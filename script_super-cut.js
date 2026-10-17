@@ -185,7 +185,7 @@ function initSuperCut() {
 
   // Global key listener for c
   window.addEventListener('keydown', (e) =>{
-    const tag = e.target.tagName.toLowerCase();
+    const tag = (e.target && e.target.tagName ? e.target.tagName : '').toLowerCase();
     if (tag === 'input'|| tag === 'textarea'|| tag === 'select') return;
 
     if (e.key.toLowerCase() === 'c'&& (overlay.hidden || overlay.style.display === 'none')) {

@@ -71,7 +71,9 @@ function setAppBackgroundInert(isInert, activeModal = null) {
     document.getElementById('sm-calibration-dialog'),
     document.getElementById('sm-manage-overlays-dialog'),
     document.getElementById('sm-manage-effects-dialog'),
-    document.getElementById('sct-manage-dialog')
+    document.getElementById('sct-manage-dialog'),
+    document.getElementById('modal-sm-3d-select'),
+    document.getElementById('sm-3d-stage-overlay')
   ];
 
   if (activeModal) {

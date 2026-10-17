@@ -148,12 +148,14 @@ function initSuperMode() {
  const id = baseSelect.value;
  window.smDeletedBaseAssetName = null;
  if (id === 'no_base') {
-   smBaseAsset = { id: 'no_base', name: 'No Base (Overlays Only)', isNoBase: true, isVirtual: true, volume: 1.0 };
+   smBaseAsset = { id: 'no_base', name: 'No Base (Overlays Only)', isNoBase: true, isVirtual: true, volume: 1.0, spatialPos: { x: 0.0, y: 0.0, z: 0.0 }, spatialTrajectory: [{ t: 0.0, x: 0.0, y: 0.0, z: 0.0 }] };
    announce('Selected: no base, record overlays only.', true);
  } else {
    smBaseAsset = getAsset(id);
    if (smBaseAsset) {
      smBaseAsset.volume = parseFloat(baseVolInput.value) / 100;
+     smBaseAsset.spatialPos = { x: 0.0, y: 0.0, z: 0.0 };
+     smBaseAsset.spatialTrajectory = [{ t: 0.0, x: 0.0, y: 0.0, z: 0.0 }];
    }
  }
  updateSmBaseModeUI(id === 'no_base');
@@ -190,7 +192,9 @@ function initSuperMode() {
  name: asset.name,
  key: rawKey,
  volume: volVal / 100,
- behavior: behaviorVal
+ behavior: behaviorVal,
+ spatialPos: { x: 0.0, y: 0.0, z: 0.0 },
+ spatialTrajectory: [{ t: 0.0, x: 0.0, y: 0.0, z: 0.0 }]
  });
 
     const behaviorText = behaviorVal === 'overlap'? 'with overlap behavior': 'with cutoff behavior';
@@ -353,6 +357,32 @@ function initSuperMode() {
  // Global key listener
  window.addEventListener('keydown', e =>{
  if (e.key === 'Escape'&& smActive) {
+    const modal3dSelect = document.getElementById('modal-sm-3d-select');
+    if (modal3dSelect && !modal3dSelect.hidden && modal3dSelect.style.display !== 'none') {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        if (typeof window.close3dSelectionModal === 'function') {
+            window.close3dSelectionModal();
+        } else if (typeof close3dSelectionModal === 'function') {
+            close3dSelectionModal();
+        }
+        return;
+    }
+
+    const stage3d = document.getElementById('sm-3d-stage-overlay');
+    if (stage3d && !stage3d.hidden && stage3d.style.display !== 'none') {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        if (typeof window.exitStudioWorkflow === 'function') {
+            window.exitStudioWorkflow(false);
+        } else if (typeof exitStudioWorkflow === 'function') {
+            exitStudioWorkflow(false);
+        }
+        return;
+    }
+
     if (manageEffectsDialog.open) {
         e.preventDefault();
         if (smManageEffectEditId !== null) {
@@ -405,7 +435,7 @@ function initSuperMode() {
     return;
  }
 
- const tag = e.target.tagName.toLowerCase();
+ const tag = (e.target && e.target.tagName ? e.target.tagName : '').toLowerCase();
  if (tag === 'input'|| tag === 'textarea'|| tag === 'select') return;
 
  // m key globally to open
@@ -419,13 +449,13 @@ function initSuperMode() {
 
  // Live Mixer keys listener
  window.addEventListener('keydown', e =>{
- if (e.repeat && e.key !== 'ArrowLeft'&& e.key !== 'ArrowRight') return; // Prevent duplicate triggers (allow held arrows)
+ if (e.repeat && !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return; // Prevent duplicate triggers (allow held arrows)
  if (!smActive || !smBaseAudio) return;
 
  const liveView = document.getElementById('sm-live-view');
  if (liveView.hidden) return;
 
- const tag = e.target.tagName.toLowerCase();
+ const tag = (e.target && e.target.tagName ? e.target.tagName : '').toLowerCase();
  if (tag === 'input'|| tag === 'textarea'|| tag === 'select') return;
 
  const pressedKey = e.key.toLowerCase();
@@ -440,6 +470,11 @@ function initSuperMode() {
   if (isCtrl && isShift) {
     // ── Ctrl+Shift+Space: Cancel Silent Gap ──────────────────────────────────
     handleCancelGap();
+  } else if (isCtrl && isAlt && !isShift) {
+    if (typeof window.handleSmLive3dBaseToggle === 'function') {
+      window.handleSmLive3dBaseToggle();
+    }
+    return;
   } else if (isCtrl) {
   // ── Ctrl+Space: Soft Pause / Punch-In ──────────────────────────────
  const isAtEnd = smBaseAudio.currentTime >= (smBaseAudio.duration || 0) - 0.05;
@@ -476,6 +511,21 @@ function initSuperMode() {
  return;
  }
 
+ // ── 3D Live Arrow Movement during playback ──
+ if (typeof window.handleSmLive3dArrowMove === 'function' && window.handleSmLive3dArrowMove(e)) {
+   e.preventDefault();
+   e.stopPropagation();
+   return;
+ }
+
+ if (typeof window.isSmLive3dMovementActive === 'function' && window.isSmLive3dMovementActive()) {
+   if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+     e.preventDefault();
+     e.stopPropagation();
+     return;
+   }
+ }
+
  // Timeline navigation: ArrowLeft (seek back) & ArrowRight (seek forward)
  if (e.key === 'ArrowRight'|| e.code === 'ArrowRight') {
  e.preventDefault();
@@ -500,6 +550,11 @@ function initSuperMode() {
  const overlay = smOverlays.find(o => matchesShortcutKey(o.key, e));
  if (overlay) {
  e.preventDefault();
+ if (isCtrl && !isAlt && !isShift) {
+   if (typeof window.handleSmLive3dKey === 'function' && window.handleSmLive3dKey(e)) {
+     return;
+   }
+ }
  const isDelete = isAlt || (isCtrl && isShift);
  if (isDelete) {
  cancelActiveOverlay(overlay);
@@ -1165,6 +1220,16 @@ function renderManageOverlaysList() {
         `;
         
         // --- Edit View Events ---
+        function resetItemSpatial() {
+            item.spatialPos = { x: 0.0, y: 0.0, z: 0.0 };
+            item.spatialTrajectory = [{ t: 0.0, x: 0.0, y: 0.0, z: 0.0 }];
+            if (typeof smLive3dActiveOverlay !== 'undefined' && smLive3dActiveOverlay && smLive3dActiveOverlay.id === item.id) {
+                if (typeof disengageSmLive3dMovement === 'function') {
+                    disengageSmLive3dMovement();
+                }
+            }
+        }
+
         const fileSelect = card.querySelector('.sm-edit-file');
         fileSelect.addEventListener('change', (e) =>{
             const newAssetId = e.target.value;
@@ -1172,6 +1237,7 @@ function renderManageOverlaysList() {
             if (newAsset) {
                 item.assetId = newAssetId;
                 item.name = newAsset.name;
+                resetItemSpatial();
                 renderSmShortcutsTable();
                 updateCardSummaryText();
                 // announce("Audio file updated to " + newAsset.name);
@@ -1183,6 +1249,7 @@ function renderManageOverlaysList() {
             const conflict = isShortcutConflict(val, idx, -1);
             if (val && !conflict) {
                 item.key = val;
+                resetItemSpatial();
                 renderSmShortcutsTable();
                 updateCardSummaryText();
             } else {
@@ -1198,12 +1265,14 @@ function renderManageOverlaysList() {
         });
         volInput.addEventListener('change', (e) =>{
             item.volume = parseFloat(e.target.value) / 100;
+            resetItemSpatial();
             renderSmShortcutsTable();
             updateCardSummaryText();
         });
         
         card.querySelector('.sm-edit-behavior').addEventListener('change', (e) =>{
             item.behavior = e.target.value;
+            resetItemSpatial();
             renderSmShortcutsTable();
             updateCardSummaryText();
         });
@@ -1216,6 +1285,7 @@ function renderManageOverlaysList() {
         }
         
         card.querySelector('.btn-manage-save').addEventListener('click', () =>{
+            resetItemSpatial();
             announce("Changes saved.", true);
             smManageEditId = null;
             card.querySelector('.sm-edit-view').hidden = true;
@@ -2423,6 +2493,16 @@ class WebAudioPlayer {
   this.isPlaying = true;
   this._ended = false;
 
+  if (this === smBaseAudio && typeof window.apply3dToBaseInstance === 'function' && typeof smBaseAsset !== 'undefined' && smBaseAsset) {
+    if (!smBaseAsset.spatialPos) {
+      smBaseAsset.spatialPos = { x: 0.0, y: 0.0, z: 0.0 };
+    }
+    if (!smBaseAsset.spatialTrajectory || smBaseAsset.spatialTrajectory.length === 0) {
+      smBaseAsset.spatialTrajectory = [{ t: 0.0, x: smBaseAsset.spatialPos.x, y: smBaseAsset.spatialPos.y, z: smBaseAsset.spatialPos.z }];
+    }
+    window.apply3dToBaseInstance(this, smBaseAsset);
+  }
+
   src.onended = () =>{
   if (this.sourceNode === src) {
   this.pausedOffset = this.duration;
@@ -2517,7 +2597,7 @@ async function startSuperModeLive() {
       alert("Please select a base audio or configure at least one overlay to start mixing.");
       return;
     }
-    smBaseAsset = { id: 'no_base', name: 'No Base (Overlays Only)', isNoBase: true, isVirtual: true, volume: 1.0 };
+    smBaseAsset = { id: 'no_base', name: 'No Base (Overlays Only)', isNoBase: true, isVirtual: true, volume: 1.0, spatialPos: { x: 0.0, y: 0.0, z: 0.0 }, spatialTrajectory: [{ t: 0.0, x: 0.0, y: 0.0, z: 0.0 }] };
   }
  const liveView = document.getElementById('sm-live-view');
  if (liveView && (!liveView.hidden || liveView.style.display !== 'none')) return;
@@ -3062,9 +3142,12 @@ function updateSmTimeline() {
  progressEl.parentElement.setAttribute('aria-valuenow', Math.round(pct));
  }
 
- // Always trigger overlays and effects that should be playing now
+  // Always trigger overlays and effects that should be playing now
  triggerReviewPlaybacksAtCurrentTime();
  triggerReviewEffectsAtCurrentTime();
+ if (typeof window.updateLive3dAudioPositions === 'function') {
+   window.updateLive3dAudioPositions(smVirtualTime);
+ }
 }
 
 function triggerReviewEffectsAtCurrentTime() {
@@ -3692,10 +3775,18 @@ function restartSmPlayback() {
  // Deactivate all live effects cleanly at current virtual time before rewinding to 0
  deactivateAllSmEffects(true, false, false);
 
+ if (typeof window.disengageSmLive3dMovement === 'function') {
+   window.disengageSmLive3dMovement();
+ }
+
  // Reset virtual time and state
  smVirtualTime = 0;
  smSoftPaused = false;
  smLastUpdateTime = getAudioCtx().currentTime;
+
+ if (typeof window.updateLive3dAudioPositions === 'function') {
+   window.updateLive3dAudioPositions(0);
+ }
 
   smBaseAudio.currentTime = 0;
   smBaseAudio.endedTriggered = false;
@@ -3704,6 +3795,9 @@ function restartSmPlayback() {
   smSoftPaused = false;
   smWasSoftPaused = false;
   smResumeBase(false);
+  if (typeof triggerReviewPlaybacksAtCurrentTime === 'function') {
+    triggerReviewPlaybacksAtCurrentTime();
+  }
 }
 
 function getSmTotalVirtualDuration() {
@@ -3734,6 +3828,10 @@ function seekSmTimeline(seconds) {
   if (!smBaseAudio) return;
   smBaseAudio.endedTriggered = false;
   const oldVirtualTime = smVirtualTime;
+
+  if (typeof window.disengageSmLive3dMovement === 'function') {
+    window.disengageSmLive3dMovement();
+  }
   const baseDuration = smBaseAudio.duration || 0;
 
   // ── Determine the true ceiling for seeking ──────────────────────────
@@ -3755,6 +3853,7 @@ function seekSmTimeline(seconds) {
   // 2. Stop any active overlay instances
   Object.keys(activeOverlayAudios).forEach(id => {
     if (activeOverlayAudios[id] && activeOverlayAudios[id].sourceNode) {
+      activeOverlayAudios[id].sourceNode.onended = null;
       try { activeOverlayAudios[id].sourceNode.stop(); } catch(_) {}
     }
     delete activeOverlayAudios[id];
@@ -3873,6 +3972,9 @@ function seekSmTimeline(seconds) {
 
   // Trigger review/ongoing effects at the new virtual time immediately
   triggerReviewEffectsAtCurrentTime();
+  if (typeof window.updateLive3dAudioPositions === 'function') {
+    window.updateLive3dAudioPositions(newVirtualTime);
+  }
 
   // ── 8. Auto-resume playback after seeking ────────────────────────────
   // Check if base audio has reached the end after seeking
@@ -3907,6 +4009,13 @@ function seekSmTimeline(seconds) {
   } else if (!activeSeg) {
     // Navigating through a silent gap during replay
     updatePlaybackStateUI('playing');
+  }
+
+  if (typeof triggerReviewPlaybacksAtCurrentTime === 'function') {
+    triggerReviewPlaybacksAtCurrentTime();
+  }
+  if (typeof window.disengageSmLive3dMovement === 'function') {
+    window.disengageSmLive3dMovement();
   }
 }
 
@@ -3946,7 +4055,9 @@ function triggerOverlayStart(overlay) {
  const gain = ctx.createGain();
  gain.gain.value = overlayVol;
  src.connect(gain);
- gain.connect(smOverlayBusNode || masterCompressor);
+ if (typeof window.apply3dToOverlayInstance !== 'function') {
+   gain.connect(smOverlayBusNode || masterCompressor);
+ }
 
  // Calculate actual timeline start applying the latency correction
  let calculatedStart = active_timeline ? (smVirtualTime + (getAudioCtx().currentTime - smLastUpdateTime)) : 0;
@@ -3957,8 +4068,17 @@ function triggerOverlayStart(overlay) {
      calculatedStart = Math.max(0, calculatedStart - effLatency);
  }
 
+  if (!overlay.spatialPos) {
+    overlay.spatialPos = { x: 0.0, y: 0.0, z: 0.0 };
+  }
+  if (!overlay.spatialTrajectory || overlay.spatialTrajectory.length === 0) {
+    overlay.spatialTrajectory = [{ t: 0.0, x: overlay.spatialPos.x, y: overlay.spatialPos.y, z: overlay.spatialPos.z }];
+  }
+
+  const clipStartPos = { ...overlay.spatialPos };
   const clip = {
   id: `sm-clip-${++smRecordedClipIdCounter}`,
+  overlayId: overlay.id,
   assetId: overlay.assetId,
   name: asset.name,
   timelineStart: calculatedStart,
@@ -3966,7 +4086,9 @@ function triggerOverlayStart(overlay) {
   cropEnd: null,
   volume: overlayVol,
   behavior: behavior,
-  isGapClip: !!smSoftPaused
+  isGapClip: !!smSoftPaused,
+  spatialPos: { ...clipStartPos },
+  spatialTrajectory: [{ t: calculatedStart, x: clipStartPos.x, y: clipStartPos.y, z: clipStartPos.z }]
   };
 
  const active = {
@@ -3982,6 +4104,10 @@ function triggerOverlayStart(overlay) {
  pausedAtOffset: 0
  };
  activeOverlayAudios[clip.id] = active;
+
+ if (typeof window.apply3dToOverlayInstance === 'function') {
+   window.apply3dToOverlayInstance(active, clip);
+ }
 
  if (active_timeline) {
  smRecordedClips.push(clip);
@@ -4068,6 +4194,7 @@ function toggleOverlayPauseResume(overlay) {
           const timelineStart = calculatedStart;
           const newClip = {
             id: `sm-clip-${++smRecordedClipIdCounter}`,
+            overlayId: overlay.id,
             assetId: overlay.assetId,
             name: active.clipEntry.name,
             timelineStart: timelineStart,
@@ -4075,7 +4202,9 @@ function toggleOverlayPauseResume(overlay) {
             cropEnd: null,
             volume: (overlay.volume !== undefined) ? overlay.volume : 1.0,
             behavior: overlay.behavior || 'overlap',
-            isGapClip: !!smSoftPaused
+            isGapClip: !!smSoftPaused,
+            spatialPos: (active.clipEntry && active.clipEntry.spatialPos) ? { ...active.clipEntry.spatialPos } : (overlay.spatialPos ? { ...overlay.spatialPos } : { x: 0.0, y: 0.0, z: 0.0 }),
+            spatialTrajectory: (active.clipEntry && active.clipEntry.spatialTrajectory) ? JSON.parse(JSON.stringify(active.clipEntry.spatialTrajectory)) : (overlay.spatialTrajectory ? JSON.parse(JSON.stringify(overlay.spatialTrajectory)) : [{ t: 0.0, x: 0.0, y: 0.0, z: 0.0 }])
           };
 
           smRecordedClips.push(newClip);
@@ -4200,13 +4329,16 @@ function syncRecordActiveOverlays() {
  const overlay = smOverlays.find(o =>o.id == active.overlayId);
  const clip = {
  id: `sm-clip-${++smRecordedClipIdCounter}`,
+ overlayId: active.overlayId,
  assetId: active.clipEntry.assetId,
  name: active.clipEntry.name,
  timelineStart: tb,
  cropStart: active.pausedAtOffset + (getAudioCtx().currentTime - active.playStartTime),
  cropEnd: null,
  volume: overlay ? (overlay.volume !== undefined ? overlay.volume : 1.0) : 1.0,
- behavior: overlay ? (overlay.behavior || 'overlap') : 'overlap'
+ behavior: overlay ? (overlay.behavior || 'overlap') : 'overlap',
+ spatialPos: (active.clipEntry && active.clipEntry.spatialPos) ? { ...active.clipEntry.spatialPos } : (overlay && overlay.spatialPos ? { ...overlay.spatialPos } : { x: 0.0, y: 0.0, z: 0.0 }),
+ spatialTrajectory: (active.clipEntry && active.clipEntry.spatialTrajectory) ? JSON.parse(JSON.stringify(active.clipEntry.spatialTrajectory)) : (overlay && overlay.spatialTrajectory ? JSON.parse(JSON.stringify(overlay.spatialTrajectory)) : [{ t: 0.0, x: 0.0, y: 0.0, z: 0.0 }])
  };
  smRecordedClips.push(clip);
  active.clipEntry = clip;
@@ -5195,6 +5327,8 @@ async function exportSuperModeWav(isSaveToLib = false) {
   offlineBaseBus.gain.value = 1.0;
   const offlineOverlayBus = offline.createGain();
   offlineOverlayBus.gain.value = 1.0;
+  window.offlineBaseBus = offlineBaseBus;
+  window.offlineOverlayBus = offlineOverlayBus;
 
   let currentOfflineEffects = [];
 
@@ -5336,7 +5470,12 @@ async function exportSuperModeWav(isSaveToLib = false) {
      const baseGain = offline.createGain();
      baseGain.gain.value = baseVolume;
      baseSrc.connect(baseGain);
-     baseGain.connect(offlineBaseBus); // Route to base bus
+     if (smBaseAsset && typeof window.apply3dToOfflineClip === 'function') {
+       const baseTarget = smBaseAsset.spatialPos ? smBaseAsset : { spatialPos: { x: 0.0, y: 0.0, z: 0.0 }, spatialTrajectory: [{ t: 0.0, x: 0.0, y: 0.0, z: 0.0 }] };
+       window.apply3dToOfflineClip(offline, baseSrc, baseGain, baseTarget, 'base', seg.timelineStart, seg.duration, offlineBaseBus);
+     } else {
+       baseGain.connect(offlineBaseBus); // Route to base bus
+     }
      baseSrc.start(seg.timelineStart, seg.sourceStart, seg.duration);
     });
   }
@@ -5349,7 +5488,14 @@ async function exportSuperModeWav(isSaveToLib = false) {
     const gain = offline.createGain();
     gain.gain.value = (c.volume !== undefined) ? c.volume : 1.0;
     src.connect(gain);
-    gain.connect(offlineOverlayBus); // Route to overlay bus
+
+    const origOverlay = (typeof smOverlays !== 'undefined') ? smOverlays.find(o => o.id === c.overlayId || o.assetId === c.assetId) : null;
+    const clipTarget = (c && c.spatialPos) ? c : (origOverlay && origOverlay.spatialPos ? origOverlay : { spatialPos: { x: 0.0, y: 0.0, z: 0.0 }, spatialTrajectory: [{ t: 0.0, x: 0.0, y: 0.0, z: 0.0 }] });
+    if (clipTarget && typeof window.apply3dToOfflineClip === 'function') {
+      window.apply3dToOfflineClip(offline, src, gain, clipTarget, 'overlay', c.timelineStart, c.duration, offlineOverlayBus);
+    } else {
+      gain.connect(offlineOverlayBus); // Route to overlay bus
+    }
 
     src.start(c.timelineStart, c.cropStart, c.duration);
    }
@@ -5371,6 +5517,8 @@ async function exportSuperModeWav(isSaveToLib = false) {
   }
   } finally {
   isExportingMedia = false;
+  window.offlineBaseBus = null;
+  window.offlineOverlayBus = null;
   }
 }
 // Copyright 2012, Google Inc.
@@ -5602,3 +5750,49 @@ Jungle.prototype.setPitchOffset = function(mult) {
         this.setDelay(delayTime*Math.abs(mult));
     previousPitch = mult;
 }
+
+// ── 3D Movement Status Helpers for Base and Overlays ──
+window.getSmOverlayPlaybackState = function(overlayId) {
+  if (typeof activeOverlayAudios === 'undefined' || !activeOverlayAudios) return 'inactive';
+  const instances = Object.values(activeOverlayAudios).filter(inst => {
+    return inst && (inst.overlayId === overlayId || (inst.clipEntry && inst.clipEntry.overlayId === overlayId));
+  });
+
+  if (instances.length === 0) return 'inactive';
+
+  const isPausedGlobally = (typeof smSoftPaused !== 'undefined' && smSoftPaused) || 
+                           (typeof smBaseAudio !== 'undefined' && smBaseAudio && smBaseAudio.paused);
+
+  const hasPlaying = instances.some(inst => inst.state === 'playing');
+  if (hasPlaying) {
+    if (isPausedGlobally) return 'paused';
+    return 'playing';
+  }
+
+  const hasPaused = instances.some(inst => inst.state === 'paused' || inst.pausedAtOffset !== undefined);
+  if (hasPaused) return 'paused';
+
+  return 'inactive';
+};
+
+window.isSmOverlayPlaying = function(overlayId) {
+  return window.getSmOverlayPlaybackState(overlayId) === 'playing';
+};
+
+window.isSmOverlayPaused = function(overlayId) {
+  return window.getSmOverlayPlaybackState(overlayId) === 'paused';
+};
+
+window.isSmOverlayInactive = function(overlayId) {
+  return window.getSmOverlayPlaybackState(overlayId) === 'inactive';
+};
+
+window.isSmBaseInGapOrInactive = function() {
+  if (typeof smBaseAudio === 'undefined' || !smBaseAudio) return true;
+  if (typeof smBaseAsset === 'undefined' || !smBaseAsset || smBaseAsset.isNoBase) return true;
+  if (smBaseAudio.paused) return true;
+  if (typeof smSoftPaused !== 'undefined' && smSoftPaused) return true;
+  if (typeof smBaseSegmentStartSource !== 'undefined' && smBaseSegmentStartSource === null) return true;
+  return false;
+};
+

@@ -501,6 +501,26 @@ window.onerror = function(msg, url, line, col, error) {
 </select>
 <p id="sm-effect-clear-hint" class="field-hint" style="margin-top: 6px;">Controls how effects are cleared or deleted. "Unified" stops and deletes all connected continuous segments of an effect together. "Sequential" deletes only the latest recorded pass, restoring any previously overwritten segments underneath.</p>
 </div>
+
+<div class="control-group" style="margin-top: 15px;">
+<label for="sm-3d-base-gap-move">3D Positioning — Move Base Audio in Silent Gap:</label>
+<select id="sm-3d-base-gap-move" style="width: 100%; padding: 8px; border-radius: var(--radius-sm); background: var(--bg-main); border: 1px solid var(--border); color: var(--text);" aria-describedby="sm-3d-base-gap-hint">
+<option value="disallow" selected>Disallow 3D movement when base is in a gap (Default)</option>
+<option value="allow">Allow 3D movement when base is in a gap</option>
+</select>
+<p id="sm-3d-base-gap-hint" class="field-hint" style="margin-top: 6px;">Controls whether Ctrl + Alt + Space can move the base audio in 3D while the base track is in a silent gap or paused.</p>
+</div>
+
+<div class="control-group" style="margin-top: 15px;">
+<label for="sm-3d-overlay-inactive-move">3D Positioning — Move Overlays (Inactive / Paused Controls):</label>
+<select id="sm-3d-overlay-inactive-move" style="width: 100%; padding: 8px; border-radius: var(--radius-sm); background: var(--bg-main); border: 1px solid var(--border); color: var(--text);" aria-describedby="sm-3d-overlay-inactive-hint">
+<option value="playing_only" selected>Only allow when actively playing (Disallow paused and inactive) (Default)</option>
+<option value="allow_paused">Allow when playing or temporarily paused (Disallow completely inactive)</option>
+<option value="allow_inactive">Allow when playing or completely inactive (Disallow temporarily paused)</option>
+<option value="always_allow">Always allow 3D movement (Allow playing, temporarily paused, and inactive)</option>
+</select>
+<p id="sm-3d-overlay-inactive-hint" class="field-hint" style="margin-top: 6px;">Controls whether Ctrl + Key can move an overlay in 3D when it is temporarily paused versus when it is completely inactive or stopped.</p>
+</div>
 </div>
 
 <!-- Headphone Compensation & Calibration in Setup View (Outside collapsible section) -->
@@ -595,7 +615,8 @@ window.onerror = function(msg, url, line, col, error) {
 <p id="sm-shortcuts-summary" style="margin-bottom: 15px; color: var(--text-muted);">0 overlays configured. 0 effects configured.</p>
 </div>
 
-<div id="sm-setup-actions" class="sm-setup-actions" style="display: flex; gap: 10px;">
+<div id="sm-setup-actions" class="sm-setup-actions" style="display: flex; gap: 10px; flex-wrap: wrap;">
+<button type="button" id="btn-sm-3d-pos" class="btn btn-primary btn-lg" aria-haspopup="dialog">3D positioning</button>
 <button type="button" id="btn-sm-go" class="btn btn-success btn-lg" disabled>Go Now — Start Live Mixer </button>
 <button type="button" id="btn-sm-continue" class="btn btn-warning btn-lg" style="display: none;">Continue Recording </button>
 </div>
@@ -990,6 +1011,105 @@ window.onerror = function(msg, url, line, col, error) {
   </div>
 </div>
 
+<!-- ── 3D POSITIONING FILE SELECTION MODAL ── -->
+<div id="modal-sm-3d-select" class="sm-overlay" role="dialog" aria-modal="true" aria-labelledby="sm-3d-select-modal-title" tabindex="-1" hidden>
+  <div class="sm-container" style="max-width: 640px; max-height: 85vh; display: flex; flex-direction: column;">
+    <div class="sm-header">
+      <h2 id="sm-3d-select-modal-title" style="font-size: 1.3rem;">Select Files for 3D Positioning</h2>
+      <button type="button" id="btn-close-sm-3d-modal" class="btn btn-sm btn-secondary" aria-label="Close 3D positioning selection dialog">Close</button>
+    </div>
+    <div style="padding: 12px 0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-bottom: 1px solid var(--border);">
+      <div class="menu-button-container">
+        <button type="button" id="btn-sm-3d-sel-menu" class="btn btn-sm btn-secondary" aria-haspopup="menu" aria-expanded="false" aria-controls="sm-3d-sel-menu">
+          Selection options
+        </button>
+        <div id="sm-3d-sel-menu" role="menu" class="accessible-dropdown-menu" aria-labelledby="btn-sm-3d-sel-menu" hidden>
+          <button type="button" role="menuitem" id="menu-item-sm-3d-sel-all" class="dropdown-menu-item">Select all</button>
+          <button type="button" role="menuitem" id="menu-item-sm-3d-desel-all" class="dropdown-menu-item">Deselect all</button>
+          <button type="button" role="menuitem" id="menu-item-sm-3d-invert-sel" class="dropdown-menu-item">Invert selection</button>
+        </div>
+      </div>
+      <span id="sm-3d-sel-count-badge" class="selection-count-badge" aria-live="polite" style="font-size: 0.85rem; color: var(--accent); padding: 4px 10px; background: rgba(124, 111, 255, 0.1); border-radius: 4px; border: 1px solid var(--border);">0 files selected</span>
+    </div>
+    <div id="sm-3d-file-list" role="list" aria-label="Select files to position in 3D space" style="flex: 1; overflow-y: auto; padding: 14px 0; max-height: 50vh; display: flex; flex-direction: column; gap: 8px;">
+      <!-- Populated dynamically with checkboxes -->
+    </div>
+    <div class="panel-actions" style="margin-top: 0; padding-top: 16px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px;">
+      <button type="button" id="btn-sm-3d-cancel" class="btn btn-secondary">Cancel</button>
+      <button type="button" id="btn-sm-3d-letsgo" class="btn btn-primary" disabled>Let's go (0)</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 3D POSITIONING STUDIO WORKSPACE (APPLICATION) ── -->
+<div id="sm-3d-stage-overlay" class="sm-overlay" role="application" aria-label="3D Spatial Positioning Studio" tabindex="-1" hidden>
+  <div class="sm-container" style="max-width: 900px; max-height: 90vh; display: flex; flex-direction: column; gap: 14px; overflow-y: auto;">
+    <div class="sm-header" style="border-bottom: 1px solid var(--border); padding-bottom: 12px;">
+      <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+        <h2 id="sm-3d-studio-title" style="font-size: 1.35rem; color: var(--accent);">3D Spatial Positioning Studio</h2>
+        <span id="sm-3d-file-progress-badge" class="badge" style="background: rgba(124, 111, 255, 0.2); color: var(--accent); border: 1px solid var(--accent); padding: 4px 10px; border-radius: 6px; font-weight: bold;">File 1 of 1</span>
+      </div>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <button type="button" id="btn-sm-3d-save-progress" class="btn btn-sm btn-primary" aria-label="Save positioned files so far and exit">Save Progress & Exit</button>
+        <button type="button" id="btn-sm-3d-skip-file" class="btn btn-sm btn-secondary" aria-label="Skip positioning this file and move to next">Skip File</button>
+        <button type="button" id="btn-sm-3d-stage-cancel" class="btn btn-sm btn-danger" aria-label="Cancel all 3D positioning and exit">Cancel All & Exit</button>
+      </div>
+    </div>
+
+    <!-- Active File Info Banner -->
+    <div class="sm-card" style="background: var(--bg-card); padding: 14px 18px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+        <div>
+          <span style="font-size: 0.85rem; color: var(--text-sub); display: block;">Currently Positioning:</span>
+          <strong id="sm-3d-current-file-name" style="font-size: 1.15rem; color: #fff;">File Name</strong>
+        </div>
+        <div style="display: flex; gap: 10px; align-items: center; font-size: 0.95rem; flex-wrap: wrap;">
+          <span id="sm-3d-current-key-badge" class="badge" style="background: #232f3f; color: #00d2ff; padding: 4px 8px; border-radius: 4px;">Key S</span>
+          <span id="sm-3d-current-vol-badge" class="badge" style="background: #232f3f; color: #00d4aa; padding: 4px 8px; border-radius: 4px;">80% Vol</span>
+          <span id="sm-3d-current-behavior-badge" class="badge" style="background: #232f3f; color: #ffb347; padding: 4px 8px; border-radius: 4px;">Overlap</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Interactive 3D Radar Stage & Instructions -->
+    <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+      <div style="flex: 1; min-width: 320px; display: flex; flex-direction: column; align-items: center; background: #080812; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px;">
+        <canvas id="sm-3d-canvas" width="480" height="340" style="width: 100%; max-width: 480px; height: 340px; display: block;" role="img" aria-label="3D Radar stage display showing listener in center and current sound position"></canvas>
+        <div id="sm-3d-focus-region" tabindex="0" role="region" aria-label="3D keyboard navigation stage. Use Arrow keys to move Left, Right, Front, Back. Use Shift plus Up and Down for elevation. Press Enter to confirm position." style="width: 100%; padding: 8px; text-align: center; font-size: 0.85rem; color: var(--accent); background: #121226; border-top: 1px solid var(--border); cursor: pointer;">
+          Click or Tab here to control sound with Arrow keys
+        </div>
+      </div>
+
+      <!-- Coordinates and Status Panel -->
+      <div style="flex: 1; min-width: 280px; display: flex; flex-direction: column; gap: 12px;">
+        <!-- Live Coordinates -->
+        <div class="sm-card" style="padding: 14px; background: var(--bg-card); border-radius: var(--radius-sm); border: 1px solid var(--border);">
+          <h4 style="font-size: 0.95rem; color: var(--text-sub); margin-bottom: 10px;">Coordinates & Position</h4>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.9rem;">
+            <div>X (Horizontal): <strong id="sm-3d-val-x" style="color: #00d2ff;">0.0m</strong></div>
+            <div>Z (Depth): <strong id="sm-3d-val-z" style="color: #00d2ff;">-2.0m</strong></div>
+            <div>Y (Elevation): <strong id="sm-3d-val-y" style="color: #00d2ff;">0.0m</strong></div>
+            <div>Distance: <strong id="sm-3d-val-dist" style="color: #00d2ff;">2.0m</strong></div>
+          </div>
+          <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); font-size: 0.95rem;">
+            <span style="color: var(--text-sub); font-size: 0.85rem;">Spatial Description:</span>
+            <div id="sm-3d-val-desc" style="color: var(--success); font-weight: bold; margin-top: 2px;">Front 2.0m, Center, Ear level</div>
+          </div>
+        </div>
+
+        <!-- Live NVDA Screen Reader Guidance & Announcer Box -->
+        <div class="sm-card" style="padding: 14px; background: #0c0c1e; border-radius: var(--radius-sm); border: 1px solid var(--border); flex: 1; display: flex; flex-direction: column; justify-content: center;">
+          <h4 style="font-size: 0.95rem; color: var(--accent); margin-bottom: 6px;">Status & Wizard Guidance</h4>
+          <div id="sm-3d-announcer-text" aria-live="assertive" style="font-size: 1.05rem; color: #fff; line-height: 1.5; font-weight: 500;">
+            Press Enter to begin positioning this sound.
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
 <script src="https://unpkg.com/fix-webm-duration" crossorigin="anonymous"></script>
 <!-- Core -->
 <script src="script_globals.js"></script>
@@ -1006,6 +1126,7 @@ window.onerror = function(msg, url, line, col, error) {
 <script src="script_trim-audio.js"></script>
 <script src="script_trim-video.js"></script>
 <script src="script_super-merger.js"></script>
+<script src="script_super-merger-3d.js"></script>
 <script src="script_super-cut.js"></script>
 <script src="script_super-trim.js"></script>
 <!-- Main Boot -->

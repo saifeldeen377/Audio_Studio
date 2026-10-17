@@ -570,7 +570,7 @@ python -m http.server 3000
 <h3 id="sm-managing-overlays">Managing Overlays and Effects</h3>
 <p>If you made a mistake or want to change your assigned triggers, use the <strong>"Manage Overlays"</strong> or <strong>"Manage Effects"</strong> buttons in the setup view. From these separate dialogs, you can:</p>
 <ul>
-<li><strong>Edit</strong>: Change the assigned file/effect, shortcut key, volume, target, or behavior of any existing trigger.</li>
+<li><strong>Edit</strong>: Change the assigned file/effect, shortcut key, volume, target, or behavior of any existing trigger. Modifying an overlay automatically resets its 3D spatial coordinates to <code>(0.0, 0.0, 0.0)</code> for that edited sound only, without affecting the Base audio or other overlays.</li>
 <li><strong>Remove</strong>: Delete a specific trigger entirely.</li>
 <li><strong>Reset</strong>: Clear all overlays or effects from your setup at once.</li>
 </ul>
@@ -591,6 +591,9 @@ python -m http.server 3000
 <tr><td><kbd>Alt</kbd>+<kbd>[Your Overlay Key]</kbd></td><td>Stop, delete, and erase the currently playing overlay clip from the log and timeline </td></tr>
 <tr><td><kbd>[Your Effect Key]</kbd></td><td>Toggle audio effect ON / OFF during live recording. During review/replay playback, pressing the key punches out (stops) the currently playing effect segment at the current timestamp.</td></tr>
 <tr><td><kbd>Alt</kbd>+<kbd>[Your Effect Key]</kbd></td><td>Stop, delete, and erase recorded effect segments from the timeline (removes connected segments or the topmost layered pass based on your clear behavior setting).</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Space</kbd></td><td>Toggle 3D movement mode for Base Audio. When enabled, arrow keys reposition the base track in real time.</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>[Your Overlay Key]</kbd></td><td>Toggle 3D movement mode for that Overlay sound. When enabled, arrow keys reposition the overlay in real time.</td></tr>
+<tr><td><kbd>&larr;</kbd> / <kbd>&rarr;</kbd> / <kbd>&uarr;</kbd> / <kbd>&darr;</kbd> (in 3D Mode)</td><td>Reposition active sound in 3D: Left/Right (pan), Forward/Back (Up/Down arrows), Elevation (Shift + Up/Down). When 3D mode is inactive or the sound ends/pauses, arrow keys immediately revert to timeline seeking.</td></tr>
 <tr><td><kbd>Escape</kbd></td><td>During Setup: Exits Super Merger. During Live Session: Returns to Setup view safely. </td></tr>
 </tbody>
 </table>
@@ -687,6 +690,92 @@ python -m http.server 3000
 
 <h4 id="sm-advanced-panel-section">Collapsible Additional Settings Panel</h4>
 <p>All secondary mixer behaviors in Step 1 are tucked inside an accessible disclosure panel toggled with the <strong>"Additional Settings &amp; Behaviors"</strong> button. Built using standard button disclosure semantics (<code>aria-expanded</code> and <code>aria-controls</code>), it keeps the setup screen streamlined while ensuring screen readers (NVDA, JAWS) announce clear collapsed/expanded status without intrusive list announcements ("1 of 1").</p>
+
+<h3 id="sm-3d-positioning">3D Spatial Audio Positioning &amp; Live 3D Navigation</h3>
+<p>Super Merger features a built-in 3D Spatial Audio Positioning engine that transforms any stereo mix into an immersive three-dimensional acoustic space. You can place the base track and any overlay sound at specific 3D coordinates (Left/Right, Front/Back, Up/Down elevation) before mixing, and move sounds dynamically across space in real time during live recording.</p>
+
+<h4>Realistic Psychoacoustic HRTF Architecture</h4>
+<p>To overcome the median plane ambiguity inherent in standard ITD/ILD panning (where sounds directly in front, behind, or below can sound identical because both ears receive the exact same timing and level), the engine implements physiological human acoustic models:</p>
+<ul>
+<li><strong>HRTF Panning:</strong> Uses Web Audio <code>PannerNode</code> with <code>panningModel = 'HRTF'</code> and inverse distance attenuation for natural, uncolored spatial positioning.</li>
+<li><strong>Natural, Direct Acoustic Purity:</strong> No artificial room convolver, fake reflections, or synthetic reverb noise are injected into monitoring or export. You hear the pure, clean, direct sound with precise anatomical spatial cues.</li>
+<li><strong>Frontal Concha Resonance &amp; Brilliance:</strong> Peak concha boost at 3.5 kHz (+5.0 dB, Q=1.3) and high presence shelf at 7.5 kHz (+3.0 dB) with wide-open air lowpass (14-20 kHz) delivering crisp, direct forward localization.</li>
+<li><strong>Behind Pinna Notch &amp; Deep Skull Shadowing:</strong> Deep anatomical notch at 6.0 kHz (-18.0 dB, Q=4.0), steep pinna high shelf cut at 2.8 kHz (-16.0 dB), head cavity warmth boost at 1.1 kHz (+3.2 dB), and muffled head-shadow lowpass cutoff dropping to 4.8 kHz producing radical, unambiguous rearward localization on headphones.</li>
+<li><strong>Below Torso-Pinna Notch:</strong> Notch at 9.0 kHz (-14.0 dB), high shelf attenuation (-8.5 dB at 5.5 kHz), and floor bounce resonance at 280 Hz (+3.8 dB) providing authentic downward positioning.</li>
+<li><strong>Above Open-Air Elevation:</strong> Open-air presence brilliance at 8.5 kHz (+4.0 dB) providing authentic upward localization.</li>
+</ul>
+
+<h4>Step 1: Pre-Mix Selection &amp; Formatting (1:1 Media Library Parity)</h4>
+<p>Immediately preceding the "Go now" button in Super Merger setup is the <strong>"3D positioning"</strong> button:</p>
+<ol>
+<li>Clicking <strong>"3D positioning"</strong> opens an accessible selection dialog containing checkboxes for your Base audio and all configured overlay sounds, built with 1:1 parity to the Media Library batch modals.</li>
+<li><strong>Immediate Focus &amp; Arrow Navigation:</strong> Focus lands directly on the first checkbox on open. Use <kbd>&uarr;</kbd> and <kbd>&darr;</kbd> to rapidly cycle between checkboxes in the list, and press <kbd>Space</kbd> to toggle selections.</li>
+<li><strong>Accessible Label Formatting:</strong> Every file is formatted specifically for fast, uninterrupted screen reader comprehension:<br>
+<code>[Filename] ,Key [X], [Vol]% [Behavior]</code><br>
+The shortcut key is placed strictly between commas to provide a clean pause, while the volume percentage and trigger behavior are read together without commas as a single fluent phrase.</li>
+<li><strong>Batch Selection Actions:</strong> A dedicated "Selection options" menu provides one-click "Select all", "Deselect all", and "Invert selection".</li>
+<li><strong>Dynamic Button &amp; Live Count:</strong> A live badge displays the exact selected count (<code>X files selected</code>), and the primary button dynamically updates to <code>Let's go (X)</code> (strictly disabled when 0 files are selected). Pressing <kbd>Escape</kbd> or clicking "Cancel" safely aborts and restores focus to <button>#btn-sm-3d-pos</button>.</li>
+<li>Clicking <strong>"Let's go (X)"</strong> launches the dedicated 3D Positioning Studio.</li>
+</ol>
+
+<h4>Step 2: The 3D Positioning Studio (<code>role="application"</code>)</h4>
+<p>The 3D Studio is an accessible modal application designed for sequential keyboard operation driven by the <kbd>Enter</kbd> key:</p>
+<ul>
+<li><strong>Initial Announcement:</strong> Screen readers announce: <em>"You selected X files to position in 3D spatial audio. Press Enter to start."</em></li>
+<li><strong>Starting a File:</strong> Pressing <kbd>Enter</kbd> announces the current file details: <em>"Now positioning [Filename], shortcut [Key], volume [Vol] percent, behavior [Behavior]. Press Enter to begin positioning."</em></li>
+<li><strong>Positioning Mode:</strong> Pressing <kbd>Enter</kbd> again begins looping the audio through the 3D acoustic engine. Move the sound through space using your keyboard:
+  <ul>
+    <li><kbd>&larr;</kbd> / <kbd>&rarr;</kbd>: Move Left / Right along the X axis (-5.0m to +5.0m).</li>
+    <li><kbd>&uarr;</kbd> / <kbd>&darr;</kbd>: Move Forward / Backward along the Z axis (-5.0m front to +5.0m behind).</li>
+    <li><kbd>Shift</kbd> + <kbd>&uarr;</kbd> / <kbd>Shift</kbd> + <kbd>&darr;</kbd>: Raise or Lower elevation along the Y axis (-3.0m below to +3.0m above).</li>
+    <li><kbd>Home</kbd> or <kbd>0</kbd>: Reset the current file to dead center (0.0m, 0.0m, 0.0m).</li>
+    <li><strong>Zero Screen Reader Clutter (Silent Movement):</strong> Arrow keys move the sound in 3D space with zero verbal interruption from NVDA so you have 100% hearing concentration.</li>
+    <li><strong>Auditory Cues (Earcons):</strong> A subtle center chime plays whenever the sound crosses the median plane (X=0), and a tactile tap indicates when boundary limits are reached.</li>
+  </ul>
+</li>
+<li><strong>Saving &amp; Progressing:</strong> Pressing <kbd>Enter</kbd> saves the 3D position and smoothly moves to the next selected file.</li>
+<li><strong>Completion:</strong> When all selected files have been positioned, the studio announces: <em>"Done! You have finished setting 3D positions for all selected files."</em> and automatically returns to Super Merger setup ready to mix.</li>
+<li><strong>Studio Utility Actions:</strong> Buttons are available for "Save Progress &amp; Exit", "Skip File", and "Cancel All &amp; Exit".</li>
+</ul>
+
+<h4>Step 3: Live Mixer 3D Integration &amp; Recording</h4>
+<p>Once positions are set and you click "Go now":</p>
+<ol>
+<li><strong>Predictable Center Default &amp; Isolated Track Reset:</strong> All sounds (both Base Audio and all Overlays) strictly default to dead-center (<code>x: 0.0m, y: 0.0m, z: 0.0m</code>), ensuring clean, balanced starting acoustics without arbitrary side offsets.
+  <ul>
+    <li><strong>Base Change Reset:</strong> When the Base Audio track is changed in Super Merger setup, its 3D spatial coordinates and trajectory automatically reset to <code>(0.0, 0.0, 0.0)</code> for the Base track only, leaving all configured overlay sounds completely untouched.</li>
+    <li><strong>Overlay Edit Reset:</strong> When an overlay sound is edited or modified in "Manage Overlays" (e.g., changing its audio file, shortcut key, volume, behavior, or saving edits), its 3D spatial coordinates and trajectory automatically reset to <code>(0.0, 0.0, 0.0)</code> for that specific edited overlay only, leaving the Base audio and all other overlay tracks unchanged.</li>
+  </ul>
+</li>
+<li><strong>Static 3D Playback:</strong> Every overlay triggered via its shortcut key, as well as the base audio, naturally plays from its saved 3D position in the soundstage.</li>
+<li><strong>Live Base Audio 3D Movement (<kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>Space</kbd>):</strong> Press <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>Space</kbd> during live playback to toggle 3D movement mode for the Base Audio track. (We use <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>Space</kbd> to prevent any conflict with the Windows window system menu). Use arrow keys to reposition or pan the base audio track live.</li>
+<li><strong>Live Overlay 3D Movement (<kbd>Ctrl</kbd> + <kbd>Key</kbd>):</strong> While recording is active, press <kbd>Ctrl</kbd> + <kbd>[Overlay Shortcut Key]</kbd> (for example, <kbd>Ctrl</kbd>+<kbd>A</kbd>) to toggle 3D movement mode for that overlay.</li>
+<li><strong>Smart Arrow Seeking vs 3D Movement:</strong> While 3D movement mode is active for a playing sound, arrow keys exclusively reposition the sound in 3D space.</li>
+<li><strong>Automatic Disengage on Inactivity or Pause:</strong> If a sound finishes playing or is paused (according to your configured movement setting), 3D movement mode automatically and cleanly disengages with zero boundary tap sounds. On that very same keystroke, arrow keys immediately revert to timeline seeking (<kbd>&larr;</kbd> rewinds 5s, <kbd>&rarr;</kbd> advances 5s).</li>
+<li><strong>3D Coordinates &amp; Dynamic Trajectory Preservation Across Seeking &amp; Restart:</strong> Whenever a sound is moved in 3D during playback, its exact coordinates and movement timestamps are recorded into a timeline trajectory. When seeking forward or backward (<kbd>&larr;</kbd> / <kbd>&rarr;</kbd> / <code>seekSmTimeline</code>) or restarting from 0.0s (<kbd>Space</kbd>), all 3D coordinates are strictly preserved and replayed along their recorded paths in real time. Active live movement arrow modes are safely disengaged upon seeking/restarting to prevent unintended drift.</li>
+<li><strong>Configurable Settings in "Additional Settings &amp; Behaviors":</strong>
+  <ul>
+    <li><code>3D Positioning — Move Base Audio in Silent Gap:</code> Select <code>Disallow 3D movement when base is in a gap (Default)</code> or <code>Allow 3D movement when base is in a gap</code>.</li>
+    <li><code>3D Positioning — Move Overlays (Inactive / Paused Controls):</code> Distinguishes fine-grained playback states with four options:
+      <ul>
+        <li><code>Only allow when actively playing (Disallow paused and inactive) (Default)</code></li>
+        <li><code>Allow when playing or temporarily paused (Disallow completely inactive)</code></li>
+        <li><code>Allow when playing or completely inactive (Disallow temporarily paused)</code></li>
+        <li><code>Always allow 3D movement (Allow playing, temporarily paused, and inactive)</code></li>
+      </ul>
+    </li>
+  </ul>
+</li>
+<li>Press <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>Space</kbd> or <kbd>Ctrl</kbd> + <kbd>[Key]</kbd> again at any time to manually toggle off live 3D movement mode and lock the sound at its current coordinates.</li>
+<li><strong>Clean Exit &amp; Safety:</strong> Pressing <kbd>Escape</kbd>, clicking "Cancel", or clicking "Skip" inside the 3D Selection modal or the 3D Studio safely returns you directly to the Super Merger setup view without closing Super Merger or losing your session setup. Redundant directional buttons have been removed from the 3D stage interface, keeping the workspace completely distraction-free for keyboard users.</li>
+</ol>
+
+<h4>Step 4: Spatial Stereo WAV Export &amp; Audio FX Integration</h4>
+<p>When you click <strong>Download WAV</strong> or <strong>Save to Library</strong>, the mix is rendered via <code>OfflineAudioContext</code>:</p>
+<ul>
+<li><strong>Full Dynamic Trajectory Automation:</strong> Both base audio segments and all overlay clips are rendered through true offline HRTF panners and acoustic filters with timeline automation ramps (<code>linearRampToValueAtTime</code>), embedding your exact dynamic trajectories directly into the exported stereo WAV file.</li>
+<li><strong>Complete Audio Effects (FX) Integration:</strong> 3D spatial tracks are routed directly through Super Merger's offline effect buses (<code>offlineBaseBus</code> and <code>offlineOverlayBus</code>). This guarantees that all live audio effects (Phone filter, Pitch shifting, Echo, Distortion, Robot, etc.) are fully and accurately applied to your spatialized tracks in the final rendered WAV file.</li>
+</ul>
 
 <h3 id="sm-resume">Resuming Interrupted Sessions</h3>
 <p>If you accidentally press <kbd>Escape</kbd> or leave the Live Mixer while you have a session with recorded clips or an active timeline, your work is perfectly preserved. When you open the Super Merger again, a <strong>Continue Recording</strong> button will appear next to the "Go Now" button. Clicking it instantly restores your base track, timeline, and all overlays precisely where you left off, and seamlessly auto-resumes the playback and recording.</p>

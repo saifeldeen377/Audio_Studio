@@ -244,11 +244,16 @@ function triggerReviewPlaybacksAtCurrentTime() {
  const gain = actx.createGain();
  gain.gain.value = (clip.volume !== undefined) ? clip.volume : 1.0;
  src.connect(gain);
- gain.connect(smOverlayBusNode || masterCompressor);
 
- // Schedule playback (sub-millisecond accuracy)
- src.start(hardwareStartTime, offsetInClip, remainingSec);
- const entry = { sourceNode: src, gainNode: gain, clip, timerId: null, playStartTime: actx.currentTime };
+ const origOverlay = (typeof smOverlays !== 'undefined') ? smOverlays.find(o => o.id === clip.overlayId || o.assetId === clip.assetId) : null;
+ const clipTarget = (clip && clip.spatialPos) ? clip : origOverlay;
+ const entry = { sourceNode: src, gainNode: gain, clip, timerId: null, playStartTime: actx.currentTime, overlayId: clip.overlayId };
+
+ if (clipTarget && clipTarget.spatialPos && typeof window.apply3dToOverlayInstance === 'function') {
+   window.apply3dToOverlayInstance(entry, clipTarget);
+ } else {
+   gain.connect(smOverlayBusNode || masterCompressor);
+ }
 
  if (clip.behavior === 'cutoff') {
  // Choke any existing playbacks of the SAME asset
@@ -259,15 +264,24 @@ function triggerReviewPlaybacksAtCurrentTime() {
  });
  }
 
+ const safeOffset = Math.max(0, offsetInClip);
+ const safeRemaining = Math.max(0, remainingSec);
+ try {
+   if (hardwareStartTime > 0) {
+     src.start(hardwareStartTime, safeOffset, safeRemaining);
+   } else {
+     src.start(0, safeOffset, safeRemaining);
+   }
+ } catch (err) {
+   console.error('Error starting review overlay playback:', err);
+ }
+
  reviewOverlayPlaybacks.push(entry);
 
  // Schedule stop precisely using the hardware clock instead of setTimeout
  if (clip.cropEnd !== null && clip.cropEnd !== undefined) {
- if (hardwareStartTime === 0) {
- src.stop(actx.currentTime + remainingSec);
- } else {
- src.stop(hardwareStartTime + remainingSec);
- }
+   const stopTime = (hardwareStartTime === 0 ? actx.currentTime : hardwareStartTime) + safeRemaining;
+   try { src.stop(stopTime); } catch (_) {}
  }
 
  src.onended = () =>{
@@ -320,7 +334,7 @@ window.stopAllStudioPreviews = function(exceptTool) {
 
 // Global Preview Arrow Key Handler for Standard Tools & Library
 window.addEventListener('keydown', (e) =>{
-  const tag = e.target.tagName.toLowerCase();
+  const tag = (e.target && e.target.tagName ? e.target.tagName : '').toLowerCase();
   if (tag === 'input'|| tag === 'textarea'|| tag === 'select') return;
   if (e.key !== 'ArrowRight'&& e.key !== 'ArrowLeft') return;
 
